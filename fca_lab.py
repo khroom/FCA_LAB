@@ -234,39 +234,19 @@ class fca_lattice:
             return 0
 
 if __name__ == '__main__':
-    start_time = time.time()
-    # binary = pd.read_csv('.\\haz_binary\\6_binary_sttdev_true+Day_before-KONUS.csv', index_col=0)
     binary = pd.read_csv('IAM_random.csv', index_col=0)
-    """
-    selected_columns_6 =['CAF2_0', 'CAF2_2', 'DLITELNOST_VYLIVKI_0', 'DLITELNOST_VYLIVKI_2', 'DOZA_GLINOZEMA_0', 'DOZA_GLINOZEMA_2',
-                         'ELECTROLIT_0', 'ELECTROLIT_2', 'FTORID_ALUMINIA_KOL_DOZI_0', 'FTORID_ALUMINIA_KOL_DOZI_2', 'FTORID_ALUMINIA_VES_DOZI_0',
-                         'FTORID_ALUMINIA_VES_DOZI_2', 'FTORID_PITANIE_0', 'FTORID_PITANIE_2', 'KO_0', 'KO_2', 'KOL_DOZ_APG_V_AUTO_REZIME_0',
-                         'KOL_DOZ_APG_V_AUTO_REZIME_2', 'KOL_DOZ_APG_V_NEDOPITKE_0', 'KOL_DOZ_APG_V_NEDOPITKE_2', 'KOL_DOZ_APG_V_NOMINALE_0',
-                         'KOL_DOZ_APG_V_NOMINALE_2', 'KOL_DOZ_APG_V_PEREPITKE_0', 'KOL_DOZ_APG_V_PEREPITKE_2', 'KOL_DOZ_APG_V_TESTE_0',
-                         'KOL_DOZ_APG_V_TESTE_2', 'MGF2_0', 'MGF2_2', 'NAPRYAZHENIE_ACYTP_0', 'NAPRYAZHENIE_ACYTP_2', 'NAPRYAZHENIE_DOBAVKA_0',
-                         'NAPRYAZHENIE_DOBAVKA_2', 'NAPRYAZHENIE_OSHINOVKI_0', 'NAPRYAZHENIE_OSHINOVKI_2', 'NAPRYAZHENIE_PRIVEDENNOE_0',
-                         'NAPRYAZHENIE_PRIVEDENNOE_2', 'NAPRYAZHENIE_TSELEVOE_0', 'NAPRYAZHENIE_TSELEVOE_2', 'OBRATNAYA_EDS_0',
-                         'OBRATNAYA_EDS_2', 'OTNOSHENIE_SKOROSTI_0', 'OTNOSHENIE_SKOROSTI_2', 'RMPR_0', 'RMPR_2', 'RMPR_DLITELNOST_MAINA_0',
-                         'RMPR_DLITELNOST_MAINA_2', 'RMPR_DLITELNOST_VIRA_0', 'RMPR_DLITELNOST_VIRA_2', 'RMPR_KOL_MAINA_0', 'RMPR_KOL_MAINA_2',
-                         'RMPR_KOL_VIRA_0', 'RMPR_KOL_VIRA_2', 'SHYM_0', 'SHYM_2', 'SILA_TOKA_SERII_0', 'SILA_TOKA_SERII_2', 'SREDNYAYA_VREMENNAYA_DOBAVKA_0',
-                         'SREDNYAYA_VREMENNAYA_DOBAVKA_2', 'SREDNYAYA_VREMENNAYA_PO_SHYMAM_0', 'SREDNYAYA_VREMENNAYA_PO_SHYMAM_2',  'SROK_SLUZBI_0',
-                         'SROK_SLUZBI_2', 'TEMPERATURA_ELECTROLITA_0', 'TEMPERATURA_ELECTROLITA_2', 'UROVEN_METALLA_0', 'UROVEN_METALLA_2',
-                         'USTAVKA_APG_0', 'USTAVKA_APG_2', 'KOL_PODDERNYTIH_ANODOV', 'AE', 'DAY_BEFORE_KONUS']
-    param = 'DAY_BEFORE_KONUS'
-    # param_df = binary[binary[param] == 1].drop(['VANNA', 'RDATE'], axis='columns')
-    param_df = binary[binary[param] == 1]
-    param_df = param_df[selected_columns_6]
-    # param_df = param_df.iloc[:, [0, 1, 2, 104]]
-    lat = fca_lattice(param_df)
-    """
+#   Инициализация объекта
     lat = fca_lattice(binary)
     print("Загрузка --- %s seconds ---" % (time.time() - start_time))
     start_time = time.time()
+#     Вызов процедуры расчета решетки. in_close - классический расчет для небольших контекстов, 
+#     stack_my_close - пошаговый расчет (считает только одну часть концептов)
     # lat.in_close(0, 0, 0)
     lat.stack_my_close(20)
     # lat.my_close(0, set(lat.context.index))
     print("Генерация концептов --- %s seconds ---" % (time.time() - start_time))
     # print(len(lat.concepts))
     start_time = time.time()
+#     построение решетки еще в работе обнаружена ошибка
     lat.fill_lattice()
     print("Построение решетки--- %s seconds ---" % (time.time() - start_time))
