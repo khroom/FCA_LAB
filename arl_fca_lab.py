@@ -9,199 +9,45 @@ from fca_lab import fca_lattice
 
 
 class ARL_fca_lab:
-    def __init__(self, df: pd.DataFrame, param:str = '', step_count: int = 100):
+    def __init__(self, df: pd.DataFrame, obj_columns : [], param : str = ''):
         """
         Конструктор класса. Инициализирует основные свойства.
         :param df: Полный бинарный датафрейм, по которому будут определятся концепты.
         :param param: Целевой параметр из числа столбцов df. По умолчанию пустая строка.
-        :param step_count: Количество шагов для расчета концептов большого контекста. По умолчанию 100.
-        Возможно по умолчанию лучше 0, чтобы иметь возможность простого рекурсивного расчета.
         TODO
         В идеале хотелось бы загружать исходную таблицу и накладывать фильтр по выбранному целевому параметру,
         для того чтобы вычислять концепты по сокращенной выборке, а оценки считать по полной.
         """
-        self.context = df
+        self.df = df
         self.param = param
+        self.obj_columns = obj_columns
+        self.param_df = df[df[param] == 1].drop(obj_columns, axis='columns')
+        self.lat = fca_lattice(self.param_df)
+        self.lat.in_close(0, 0, 0)
 
-        # возможно уже не нужны. Явно нужно пересмотреть
-        if param:
-            self.concepts = [{'A': self.derivation(param, 1), 'B': {param}}]
-            # self.context.drop([param], axis='columns')
-            # проверить следующую строку
-            self.threshold_base = len(self.concepts[0]['A'])
-        else:
-            self.concepts = [{'A': set(self.context.index), 'B': set()}, {'A': set(), 'B': set(self.context.columns)}]
-            #
-            # проверить следующую строку
-            self.threshold_base = len(self.context.index)
-
-        # Множество концептов для быстрого расчета. Генерится только объем и хранится в виде кортежа (хешируемый тип)
-        self.concepts_set = set()
-        self.columns_len = len(self.context.columns)
-        self.index_len = len(self.context.index)
-        self.step_count = step_count
-        # Шаг расчета
-        step = self.index_len / step_count
-        # Интервалы для быстрого расчета концептов. Левая и правая границы.
-        self.stack_intervals = pd.DataFrame(index=range(step_count))
-        self.stack_intervals['left'] = [np.around(step * (step_count - i)) for i in range(1, step_count + 1)]
-        self.stack_intervals['right'] = [np.around(step * (step_count - i)) for i in range(step_count)]
-        # Стек параметров вызова функции для каждого интервала. Позваляет постепенно опускаться вглубь,
-        # расчитывая сперва самые большие по объему концепты.
-        self.stack = [[] for i in range(self.step_count)]
-        # Предварительный расчет обемов для каждого столбца и содержаний для каждой строки. Ускоряет расчет концептов.
-        self.context_derivation_0 = pd.Series(index=self.context.index, dtype='object')
-        self.context_derivation_1 = pd.Series(index=self.context.columns, dtype='object')
-        for i in range(0, len(self.context.index)):
-            self.context_derivation_0.iloc[i] = self.derivation(self.context.index[i], 0)
-        for i in range(0, len(self.context.columns)):
-            self.context_derivation_1.iloc[i] = self.derivation(self.context.columns[i], 1)
-        # Инициализация двунаправленного графа для представления решетки
-        self.lattice = nx.DiGraph()
-        # Инициализация двунаправленного графа для экспериментальной решетки с маркированными ребрами (пока не вышло) для ускорения
-        # выполнения запросов к ИАМ. Надо бы разделить ИАМ от простого АФП и от Ассоциативных правил.
-        self.lbl_lattice = nx.DiGraph()
-
-    def is_cannonical(self, column, new_a, r):
+    def concepts_support(self):
         """
-        Проверка концепта на каноничность. Классический алгоритм
-        :param column: номер столца на основе которого сгенерирован концепт
-        :param new_a: объем нового концепта, который нужно проверить на каноничность
-        :param r: номер концепта на основе которго сгененирован новый концепт
-        :return: результат проверки
-        """
-        for i in range(column, -1, -1):
-            if self.context.columns[i] not in self.concepts[r]['B']:
-                if new_a.issubset(self.context_derivation_1.iloc[i]):
-                    return False
-        return True
-
-    def in_close(self, column: int, r: int, threshold=0.0):
-        """
-        Закрывает концепт по контексту. Классический алгоритм
-        :param column: номер столбца с которого начать проверку
-        :param r: номер текущего контекста
-        :param threshold: порог (использовался при расчете концептов заданного объема)
+        Рассчет параметров для концептов относительно исходного контекста.
         :return:
         """
-        for j in range(column, len(self.context.columns)):
-            new_concept = {'A': self.context_derivation_1.iloc[j].intersection(self.concepts[r]['A']), 'B': set()}
-            if len(new_concept['A']) == len(self.concepts[r]['A']):
-                self.concepts[r]['B'].add(self.context.columns[j])
-            else:
-                if (len(new_concept['A']) != 0) and (len(new_concept['A']) > self.threshold_base * threshold):
-                    if self.is_cannonical(j - 1, new_concept['A'], r):
-                        new_concept['B'] = new_concept['B'].union(self.concepts[r]['B'])
-                        new_concept['B'].add(self.context.columns[j])
-                        self.concepts.append(new_concept)
-                        self.in_close(j + 1, len(self.concepts) - 1, threshold)
+        df_derivation = pd.Series(index=self.lat.context.columns, dtype='object')
+        for col in df_derivation.index:
+            df_derivation.loc[col] = set(self.df.loc[:, col][self.df.loc[:, col] == 1].index)
 
-    def my_close(self, column: int, concept_A: set, step_n: int):
-        """
-        Оригинальный алгоритм поиска концептов по шагам
-        :param column: номер столбца
-        :param concept_A: объем концепта
-        :param step_n: шаг расчета
-        :return:
-        """
-        tp_concept_a = tuple(sorted(concept_A))
-        if tp_concept_a not in self.concepts_set:
-            self.concepts_set.add(tp_concept_a)
-
-        for j in range(column, self.columns_len):
-            new_concept_a = concept_A.intersection(self.context_derivation_1.iloc[j])
-            new_concept_a_len = len(new_concept_a)
-            if (new_concept_a_len > self.stack_intervals.loc[step_n, 'left']) & (
-                    new_concept_a_len <= self.stack_intervals.loc[step_n, 'right']):
-                tp_concept_a = tuple(sorted(new_concept_a))
-                if tp_concept_a not in self.concepts_set:
-                    self.concepts_set.add(tp_concept_a)
-                    print('\r', len(self.concepts_set), end='')
-                    self.my_close(j + 1, new_concept_a, step_n)
-            elif (new_concept_a_len < self.stack_intervals.loc[step_n, 'left']) & (new_concept_a_len > 0):
-                # print('\r', new_concept_a_len, end='')
-                ind = self.stack_intervals[(self.stack_intervals['left'] < new_concept_a_len) & (self.stack_intervals['right'] >= new_concept_a_len)].index.values[0]
-                self.stack[ind].append((j+1, new_concept_a, ind))
-
-    def stack_my_close(self):
-        """
-        Управление стеком параметров вызова функции my_close
-        :return:
-        """
-        concept_count = 0
-        self.stack[0].append((0, set(self.context.index), 0))
-        for i in range(self.step_count):
-            print(i,', interval: ', self.stack_intervals.loc[i, 'left'], ' - ', self.stack_intervals.loc[i, 'right'],
-                  ', stack: ', len(self.stack[i]))
-            while self.stack[i]:
-                self.my_close(*self.stack[i].pop())
-
-            concept_count = concept_count + len(self.concepts_set)
-            print('\n', 'concepts: ', len(self.concepts_set), '/', concept_count)
-            joblib.dump(self.concepts_set, ".\\result\\concepts_set" + str(i) + ".joblib")
-            self.concepts_set.clear()
-            self.stack[i].clear()
-
-    def derivation(self, q_val: str, axis=0):
-        """
-        Вычисляет по контексту множество штрих для одного элемента (строка или столбец)
-        :param q_val: индекс столбца или строки
-        :param axis: ось (1 - стобец, 0 - строка)
-        :return: результат деривации (операции штрих)
-        """
-        if axis == 1:
-            # поиск по измерениям (столбцам)
-            tmp_df = self.context.loc[:, q_val]
-        else:
-            # поиск по показателям (строкам)
-            tmp_df = self.context.loc[q_val, :]
-        return set(tmp_df[tmp_df == 1].index)
-
-    def fill_lattice(self):
-        """
-        Заполняет двунаправленный граф (решетку)
-        :return:
-        """
-        # сортируем множество концептов по мощности объема. Навводила разные ключи в словарь, надо бы упорядочить.
-        for i in range(len(self.concepts)):
-            self.concepts[i]['W'] = len(self.concepts[i]['A'])
-        self.concepts = sorted(self.concepts, key=lambda concept: concept['W'], reverse=True)
-
-        for i in range(len(self.concepts)):
-            self.lattice.add_node(i, ext_w=self.concepts[i]['W'],
-                                  intent=','.join(str(s) for s in self.concepts[i]['B']))
-            for j in range(i - 1, -1, -1):
-                if (self.concepts[j]['B'].issubset(self.concepts[i]['B'])) & (
-                        self.concepts[i]['A'].issubset(self.concepts[j]['A'])):
-                    if not nx.has_path(self.lattice, j, i):
-                        self.lattice.add_edge(j, i,
-                                              add_col=','.join(
-                                                  str(s) for s in self.concepts[j]['B'] - self.concepts[i]['B']))
-
-    def concepts_support(self, binary: pd.DataFrame):
-        """
-        Рассчитываю параметры для концептов относительно исходного контекста.
-        :param binary: исходный контекст без учета целевого параметра. Может лучше его сразу передавать в класс.
-        :return:
-        """
-        binary_derivation = pd.Series(index=self.context.columns, dtype='object')
-        for col in binary_derivation.index:
-            binary_derivation.loc[col] = set(binary.loc[:, col][binary.loc[:, col] == 1].index)
-
-        for i in range(len(self.concepts)):
+        for i in range(len(self.lat.concepts)):
             # Мощность содержания для левой части правила (без целевого параметра)
-            self.concepts[i]['left_extent'] = len(
-                set.intersection(*[binary_derivation[j] for j in self.concepts[i]['B'].difference({self.param})]))
+            self.lat.concepts[i]['left_extent'] = len(
+                set.intersection(*[df_derivation[j] for j in self.lat.concepts[i]['B'].difference({self.param})]))
             # Можность содержания для всего правила (с целевым параметром)
-            self.concepts[i]['rule_extent'] = len(self.concepts[i]['A'])
+            self.lat.concepts[i]['rule_extent'] = len(self.lat.concepts[i]['A'])
             # Мощность объема левой части правила
-            self.concepts[i]['rule_intent'] = len(self.concepts[i]['B'])
+            self.lat.concepts[i]['rule_intent'] = len(self.lat.concepts[i]['B'])
             # Достоверность правила, как часто срабатывает
-            self.concepts[i]['confidence'] = self.concepts[i]['rule_extent'] / self.concepts[i]['left_extent']
+            self.lat.concepts[i]['confidence'] = self.lat.concepts[i]['rule_extent'] / self.lat.concepts[i]['left_extent']
             # Поддержка, степень совместности
-            self.concepts[i]['lift'] = np.around(
-                self.concepts[i]['rule_extent'] * len(binary) ** (self.concepts[i]['rule_intent'] - 1) / \
-                np.prod([len(binary_derivation.loc[b]) for b in self.concepts[i]['B']]), decimals=1)
+            self.lat.concepts[i]['lift'] = np.around(
+                self.lat.concepts[i]['rule_extent'] * len(binary) ** (self.lat.concepts[i]['rule_intent'] - 1) / \
+                np.prod([len(df_derivation.loc[b]) for b in self.lat.concepts[i]['B']]), decimals=1)
 
     def concepts_evaluation(self, objects: pd.DataFrame, rule_weight_threshold: float):
         """
