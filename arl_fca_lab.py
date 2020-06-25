@@ -8,22 +8,25 @@ from networkx.drawing.nx_agraph import graphviz_layout
 from fca_lab import fca_lattice
 
 
-class ARL_fca_lab:
-    def __init__(self, df: pd.DataFrame, obj_columns : [], param : str = ''):
+class arl_fca_lab:
+    def __init__(self, df: pd.DataFrame, obj_columns : [], goal_param : str = ''):
         """
         Конструктор класса. Инициализирует основные свойства.
         :param df: Полный бинарный датафрейм, по которому будут определятся концепты.
         :param param: Целевой параметр из числа столбцов df. По умолчанию пустая строка.
         :param obj_columns: Список названий столбцов, относящихся к описанию объекта наблюдения
-        TODO
-        В идеале хотелось бы загружать исходную таблицу и накладывать фильтр по выбранному целевому параметру,
-        для того чтобы вычислять концепты по сокращенной выборке, а оценки считать по полной.
         """
         self.df = df
-        self.param = param
+        self.param = goal_param
         self.obj_columns = obj_columns
-        self.param_df = df[df[param] == 1].drop(obj_columns, axis='columns')
-        self.lat = fca_lattice(self.param_df)
+        """
+        Подготовка контекста для расчета решетки - pdf. Из исходного датасета описательные столбцы,
+        которые не содержат числовых параметров и относятся к описанию объектов исследования. Оставляем только
+        строки у которых в столбце целевого параметра стоит 1.
+        """
+        self.pdf = df[df[goal_param] == 1].drop(obj_columns, axis='columns')
+        # Инициализация решетки по урзонному контексту
+        self.lat = fca_lattice(self.pdf)
 
     def concepts_support(self):
         """
@@ -180,22 +183,19 @@ class ARL_fca_lab:
 
 if __name__ == '__main__':
     start_time = time.time()
-    # binary = pd.read_csv('.\\haz_binary\\10_binary_stddev_true_anomalies_only.csv', index_col=0)
-    binary = pd.read_csv('IAM.csv',index_col=0)
+    binary = pd.read_csv('.\\haz_binary\\10_binary_stddev_true_anomalies_only.csv', index_col=0)
+    # binary = pd.read_csv('IAM.csv',index_col=0)
     param = ''
-    # param_df = binary[binary[param] == 1].drop(['VANNA', 'RDATE'], axis='columns')
-    # param_df = param_df.iloc[:, [0, 1, 2, 104]]
-    lat = pca_lattice(binary, param)
+    arl = arl_fca_lab(binary, ['VANNA', 'RDATE'], 'KONUSOV')
     print("Загрузка --- %s seconds ---" % (time.time() - start_time))
     start_time = time.time()
-    lat.in_close(0, 0, 0)
+    arl.lat.in_close(0, 0, 0)
     # lat.stack_my_close()
-    # lat.my_close(0, set(lat.context.index))
     print("Генерация концептов --- %s seconds ---" % (time.time() - start_time))
-    print(len(lat.concepts))
-    start_time = time.time()
-    lat.fill_lattice()
-    print("Построение решетки--- %s seconds ---" % (time.time() - start_time))
+    # print(len(arl.lat.concepts))
+    # start_time = time.time()
+    # lat.fill_lattice()
+    # print("Построение решетки--- %s seconds ---" % (time.time() - start_time))
     # start_time = time.time()
     # lat.concepts_support(binary)
     # print("Расчет оценок--- %s seconds ---" % (time.time() - start_time))
