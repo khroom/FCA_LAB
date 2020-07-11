@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import time
+import os
 import networkx as nx
 import matplotlib.pyplot as plt
 import joblib
@@ -144,7 +145,24 @@ class fca_lattice:
             # выгрузка найденных концептов в файл, очистка списка концептов и стека вызова для интервала
             joblib.dump(self.concepts_set, ".\\result\\concepts_set" + str(i) + ".joblib")
             self.concepts_set.clear()
-
+            
+    def read_concepts(self,num_concept_set:int):
+        #выгрузка
+        load_joblib = joblib.load(".\\result\\concepts_set" + str(num_concept_set) + ".joblib")
+        #проверка на пустую выгрузку
+        if load_joblib!=set():
+            load_joblib = set(list(load_joblib)[0])
+            B=set(self.context_derivation_0.index)
+            B=load_joblib.intersection(B)
+            B=self.context_derivation_0[list(B)].values
+            B=list(B)
+            final_B=B[0]
+            for i in B:
+                final_B=final_B.intersection(i)
+            self.concepts = [{'A': set(load_joblib), 'B': final_B}]
+        elements_index=list(self.concepts[0]['A'])
+        elements_column=list(self.concepts[0]['B'])
+        return self.context[elements_column].loc[elements_index]
     def stack_concepts_repair(self, ):
         """
         Загрузка концептов расчитанных пошагово. Надо подумть как лучше сделать ,если количество шагов расчета
@@ -232,10 +250,11 @@ class fca_lattice:
                         return list(self.lattice.succ[bound_n].items())[n][0]
         else:
             return 0
-
+        
 if __name__ == '__main__':
-    binary = pd.read_csv('IAM_random.csv', index_col=0)
+    binary = pd.read_csv('IAM.csv', index_col=0)
 #   Инициализация объекта
+    start_time=time.time()
     lat = fca_lattice(binary)
     print("Загрузка --- %s seconds ---" % (time.time() - start_time))
     start_time = time.time()
@@ -250,3 +269,4 @@ if __name__ == '__main__':
 #     построение решетки еще в работе обнаружена ошибка
     lat.fill_lattice()
     print("Построение решетки--- %s seconds ---" % (time.time() - start_time))
+    bcd = lat.read_concepts(14)
