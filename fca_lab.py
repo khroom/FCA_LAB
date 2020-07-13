@@ -147,6 +147,12 @@ class fca_lattice:
             self.concepts_set.clear()
             
     def read_concepts(self,num_concept_set:int):
+        """
+        Загрузка концептов расчитанных пошагово. Надо подумть как лучше сделать ,если количество шагов расчета
+        не является свойстом решетки, а задается параметром
+        :param num_concept_set:
+        :return:
+        """
         #выгрузка
         load_joblib = joblib.load(".\\result\\concepts_set" + str(num_concept_set) + ".joblib")
         #проверка на пустую выгрузку
@@ -163,12 +169,10 @@ class fca_lattice:
         elements_index=list(self.concepts[0]['A'])
         elements_column=list(self.concepts[0]['B'])
         return self.context[elements_column].loc[elements_index]
-    def stack_concepts_repair(self, ):
-        """
-        Загрузка концептов расчитанных пошагово. Надо подумть как лучше сделать ,если количество шагов расчета
-        не является свойстом решетки, а задается параметром
-        :return:
-        """
+
+
+    # def stack_concepts_repair(self, ):
+
 
     def derivation(self, q_val: str, axis=0):
         """
