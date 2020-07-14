@@ -190,7 +190,7 @@ if __name__ == '__main__':
     print("Загрузка --- %s seconds ---" % (time.time() - start_time))
     start_time = time.time()
     # arl.lat.in_close(0, 0, 0)
-    arl.lat.stack_my_close(10)
+    arl.lat.stack_my_close(20)
     print("Генерация концептов --- %s seconds ---" % (time.time() - start_time))
     # print(len(arl.lat.concepts))
     # start_time = time.time()
