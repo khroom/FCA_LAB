@@ -104,7 +104,7 @@ class fca_lattice:
                     self.concepts_set.add(tp_concept_a)
                     print('\r', len(self.concepts_set), end='')
                     self.__my_close__(j + 1, new_concept_a, step_n)
-            elif (new_concept_a_len < self.stack_intervals.loc[step_n, 'left']) & (new_concept_a_len > 0):
+            elif (new_concept_a_len <= self.stack_intervals.loc[step_n, 'left']) & (new_concept_a_len > 0):
                 # print('\r', new_concept_a_len, end='')
                 ind = self.stack_intervals[(self.stack_intervals['left'] < new_concept_a_len) & (self.stack_intervals['right'] >= new_concept_a_len)].index.values[0]
                 # добавление параметров в стек вызова
@@ -134,14 +134,14 @@ class fca_lattice:
         # проход по интервалам
         for i in range(step_count):
             # печать информации о списке параметров вызова в интервале
-            print(i,', interval: ', self.stack_intervals.loc[i, 'left'], ' - ', self.stack_intervals.loc[i, 'right'],
+            print('\n', i,', interval: ', self.stack_intervals.loc[i, 'left'], ' - ', self.stack_intervals.loc[i, 'right'],
                   ', stack: ', len(self.stack[i]))
             # вызов функци определения концептов с сохраненными параметрвами вызова
             for k in self.stack[i].keys():
                 self.__my_close__(self.stack[i][k], set(k), i)
             # подсчет общего числа концептов
             concept_count = concept_count + len(self.concepts_set)
-            print('\n', 'concepts: ', len(self.concepts_set), '/', concept_count)
+            print('concepts: ', len(self.concepts_set), '/', concept_count)
             # выгрузка найденных концептов в файл, очистка списка концептов и стека вызова для интервала
             joblib.dump(self.concepts_set, ".\\result\\concepts_set" + str(i) + ".joblib")
             self.concepts_set.clear()
@@ -256,7 +256,7 @@ class fca_lattice:
             return 0
         
 if __name__ == '__main__':
-    binary = pd.read_csv('IAM.csv', index_col=0)
+    binary = pd.read_csv('out.csv', index_col=0)
 #   Инициализация объекта
     start_time=time.time()
     lat = fca_lattice(binary)
@@ -264,13 +264,13 @@ if __name__ == '__main__':
     start_time = time.time()
 #     Вызов процедуры расчета решетки. in_close - классический расчет для небольших контекстов, 
 #     stack_my_close - пошаговый расчет (считает только одну часть концептов)
-    # lat.in_close(0, 0, 0)
-    lat.stack_my_close(20)
+#     lat.in_close(0, 0, 0)
+    lat.stack_my_close(5)
     # lat.my_close(0, set(lat.context.index))
     print("Генерация концептов --- %s seconds ---" % (time.time() - start_time))
     # print(len(lat.concepts))
-    start_time = time.time()
+    # start_time = time.time()
 #     построение решетки еще в работе обнаружена ошибка
-    lat.fill_lattice()
-    print("Построение решетки--- %s seconds ---" % (time.time() - start_time))
-    bcd = lat.read_concepts(14)
+#     lat.fill_lattice()
+#     print("Построение решетки--- %s seconds ---" % (time.time() - start_time))
+    # bcd = lat.read_concepts(14)
