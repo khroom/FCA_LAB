@@ -14,7 +14,7 @@ class fca_lattice:
         Конструктор класса. Инициализирует основные свойства.
         :param df: Полный бинарный датафрейм, по которому будут определятся концепты.
         :param param: Целевой параметр из числа столбцов df. По умолчанию пустая строка.
-        :param step_count: Количество шагов для расчета концептов большого контекста. По умолчанию 100.
+        :param stack_intervals_count: Количество шагов для расчета концептов большого контекста. По умолчанию 100.
         Возможно по умолчанию лучше 0, чтобы иметь возможность простого рекурсивного расчета.
         TODO
         В идеале хотелось бы загружать исходную таблицу и накладывать фильтр по выбранному целевому параметру,
@@ -31,7 +31,8 @@ class fca_lattice:
 
         self.columns_len = len(self.context.columns)
         self.index_len = len(self.context.index)
-        self.step_count = 0
+        # Определяем переменные для интервального расчета концептов
+        self.stack_intervals_count = 0
         self.stack_intervals = pd.DataFrame()
         self.stack = []
 
@@ -82,12 +83,12 @@ class fca_lattice:
                         self.concepts.append(new_concept)
                         self.in_close(j + 1, len(self.concepts) - 1, threshold)
 
-    def __my_close__(self, column: int, concept_A: set, step_n: int):
+    def __my_close__(self, column: int, concept_A: set, interval_number: int):
         """
-        Оригинальный алгоритм поиска концептов по шагам
+        Оригинальный алгоритм поиска концептов в интервалах
         :param column: номер столбца
-        :param concept_A: объем концепта
-        :param step_n: шаг расчета
+        :param concept_A: объем концепта как множество индексов строк
+        :param interval_number: номер интервала расчета
         :return:
         """
         tp_concept_a = tuple(sorted(concept_A))
@@ -98,13 +99,13 @@ class fca_lattice:
             new_concept_a = concept_A.intersection(self.context_derivation_1.iloc[j])
             new_concept_a_len = len(new_concept_a)
             tp_concept_a = tuple(sorted(new_concept_a))
-            if (new_concept_a_len > self.stack_intervals.loc[step_n, 'left']) & (
-                    new_concept_a_len <= self.stack_intervals.loc[step_n, 'right']):
+            if (new_concept_a_len > self.stack_intervals.loc[interval_number, 'left']) & (
+                    new_concept_a_len <= self.stack_intervals.loc[interval_number, 'right']):
                 if tp_concept_a not in self.concepts_set:
                     self.concepts_set.add(tp_concept_a)
                     print('\r', len(self.concepts_set), end='')
-                    self.__my_close__(j + 1, new_concept_a, step_n)
-            elif (new_concept_a_len <= self.stack_intervals.loc[step_n, 'left']) & (new_concept_a_len > 0):
+                    self.__my_close__(j + 1, new_concept_a, interval_number)
+            elif (new_concept_a_len <= self.stack_intervals.loc[interval_number, 'left']) & (new_concept_a_len > 0):
                 # print('\r', new_concept_a_len, end='')
                 ind = self.stack_intervals[(self.stack_intervals['left'] < new_concept_a_len) & (self.stack_intervals['right'] >= new_concept_a_len)].index.values[0]
                 # добавление параметров в стек вызова
@@ -113,12 +114,12 @@ class fca_lattice:
 
     def stack_my_close(self, step_count: int = 100):
         """
-        Управление стеком параметров вызова функции my_close
-        :param step_count: количесвто шагов расчета
+        Процедура интервального расчета концептов. Управление стеком параметров вызова функции __my_close__ по интервалам
+        :param step_count: количество шагов расчета
         :return:
         """
         # Шаг расчета
-        self.step_count = step_count
+        self.stack_intervals_count = step_count
         step = self.index_len / step_count
         # Интервалы для быстрого расчета концептов. Левая и правая границы.
         self.stack_intervals = self.stack_intervals.reindex(index=range(step_count))
@@ -129,14 +130,14 @@ class fca_lattice:
         self.stack = [{} for i in range(step_count)]
 
         concept_count = 0
-        # инициализация первого интервала супремумом
+        # добавление супремума как первого набора параметров вызова ункции расчета концептов в нулевом интервале
         self.stack[0].update({tuple(sorted(set(self.context.index))): 0})
         # проход по интервалам
         for i in range(step_count):
             # печать информации о списке параметров вызова в интервале
             print('\n', i,', interval: ', self.stack_intervals.loc[i, 'left'], ' - ', self.stack_intervals.loc[i, 'right'],
                   ', stack: ', len(self.stack[i]))
-            # вызов функци определения концептов с сохраненными параметрвами вызова
+            # вызов функци расчета концептов с сохраненными параметрвами вызова
             for k in self.stack[i].keys():
                 self.__my_close__(self.stack[i][k], set(k), i)
             # подсчет общего числа концептов
@@ -256,7 +257,7 @@ class fca_lattice:
             return 0
         
 if __name__ == '__main__':
-    binary = pd.read_csv('out.csv', index_col=0)
+    binary = pd.read_csv('book.csv', index_col=0, sep=';')
 #   Инициализация объекта
     start_time=time.time()
     lat = fca_lattice(binary)
@@ -264,11 +265,11 @@ if __name__ == '__main__':
     start_time = time.time()
 #     Вызов процедуры расчета решетки. in_close - классический расчет для небольших контекстов, 
 #     stack_my_close - пошаговый расчет (считает только одну часть концептов)
-#     lat.in_close(0, 0, 0)
-    lat.stack_my_close(5)
+    lat.in_close(0, 0, 0)
+#     lat.stack_my_close(5)
     # lat.my_close(0, set(lat.context.index))
     print("Генерация концептов --- %s seconds ---" % (time.time() - start_time))
-    # print(len(lat.concepts))
+    print(len(lat.concepts))
     # start_time = time.time()
 #     построение решетки еще в работе обнаружена ошибка
 #     lat.fill_lattice()
