@@ -12,7 +12,7 @@ class arl_fca_lab:
     def __init__(self, df: pd.DataFrame, obj_columns : [], goal_param : str = ''):
         """
         Конструктор класса. Инициализирует основные свойства.
-        :param df: Полный бинарный датафрейм, по которому будут определятся концепты.
+        :param df: Полный бинарный датафрейм, по которому будут определяться концепты.
         :param param: Целевой параметр из числа столбцов df. По умолчанию пустая строка.
         :param obj_columns: Список названий столбцов, относящихся к описанию объекта наблюдения
         """
@@ -25,7 +25,7 @@ class arl_fca_lab:
         строки у которых в столбце целевого параметра стоит 1.
         """
         self.pdf = df[df[goal_param] == 1].drop(obj_columns, axis='columns')
-        # Инициализация решетки по урзонному контексту
+        # Инициализация решетки по урезанному контексту
         self.lat = fca_lattice(self.pdf)
 
     def concepts_support(self):
@@ -189,8 +189,8 @@ if __name__ == '__main__':
     arl = arl_fca_lab(binary, ['VANNA', 'RDATE'], 'KONUSOV')
     print("Загрузка --- %s seconds ---" % (time.time() - start_time))
     start_time = time.time()
-    arl.lat.in_close(0, 0, 0)
-    # lat.stack_my_close()
+    # arl.lat.in_close(0, 0, 0)
+    arl.lat.stack_my_close(20)
     print("Генерация концептов --- %s seconds ---" % (time.time() - start_time))
     # print(len(arl.lat.concepts))
     # start_time = time.time()
