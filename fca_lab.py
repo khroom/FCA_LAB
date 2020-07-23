@@ -154,23 +154,66 @@ class fca_lattice:
         :param num_concept_set:
         :return:
         """
+        #очистка self.concepts
+        self.concepts=[]
+        
         #выгрузка
         load_joblib = joblib.load(".\\result\\concepts_set" + str(num_concept_set) + ".joblib")
         #проверка на пустую выгрузку
-        if load_joblib!=set():
-            load_joblib = set(list(load_joblib)[0])
-            B=set(self.context_derivation_0.index)
-            B=load_joblib.intersection(B)
-            B=self.context_derivation_0[list(B)].values
-            B=list(B)
-            final_B=B[0]
-            for i in B:
-                final_B=final_B.intersection(i)
-            self.concepts = [{'A': set(load_joblib), 'B': final_B}]
-        elements_index=list(self.concepts[0]['A'])
-        elements_column=list(self.concepts[0]['B'])
-        return self.context[elements_column].loc[elements_index]
-
+        if load_joblib==set():
+            return self.concepts
+        else:
+            load_joblib = list(load_joblib)
+            for indexes_concepts in load_joblib:
+                #print(indexes_concepts)
+                indexes_concepts_value = set(indexes_concepts)
+                B=set(self.context_derivation_0.index)
+                B=indexes_concepts_value.intersection(B)
+                B=self.context_derivation_0[list(B)].values
+                B=list(B)
+                final_B=B[0]
+                for i in B:
+                    final_B=final_B.intersection(i)
+                # для высчета support    
+                # elements_index=list(self.concepts[0]['A'])
+                # elements_column=list(self.concepts[0]['B'])
+                # dataset_len=len(self.context)
+                # support=len(self.context[elements_column].loc[elements_index])/dataset_len
+                self.concepts.append({'A': set(indexes_concepts_value), 'B': final_B})
+        return self.concepts
+    
+    def check_read_concepts(self,):
+        result=[{'A' : set([0,1,2,3,4,5,6,7,8,9,10]), 'B' : set()},
+                {'A' : set([0,1,2,3,4,5,6]), 'B' : set('a')},
+                {'A' : set([1,2,3]), 'B' : set('b')},
+                {'A' : set([2,5]), 'B' : set('c')},
+                {'A' : set([6]), 'B' : set('d')},
+                {'A' : set([7]), 'B' : set('i')},
+                {'A' : set([8,9]), 'B' : set('j')},
+                {'A' : set([7,8,9,10]), 'B' : set('k')},
+                {'A' : set([1,2,3]), 'B' : set(['a','b'])},
+                {'A' : set([2]), 'B' : set(['b','c'])},
+                {'A' : set([2,5]), 'B' : set(['a','c'])},
+                {'A' : set([6]), 'B' : set(['a','d'])},
+                {'A' : set([7]), 'B' : set(['i','k'])},
+                {'A' : set([8,9]), 'B' : set(['j','k'])},
+                {'A' : set([2]), 'B' : set(['a','b','c'])}]
+                # {'A' : set(), 'B' : set(['a','b','c','d','e','f','g','i','j','k'])}]
+        result1=[]
+        for i in range(0,5):
+            tmp=self.read_concepts(i)
+            for j in tmp:
+                result1.append(j)
+        if len(result1)!=len(result):
+            return False
+        for i in result:
+            Flag=True
+            for j in result1:
+                if (i['A']==j['A'])&(i['B']==j['B']):
+                    Flag=False
+            if Flag:
+                return False
+        return True
 
     # def stack_concepts_repair(self, ):
 
@@ -266,7 +309,7 @@ if __name__ == '__main__':
 #     Вызов процедуры расчета решетки. in_close - классический расчет для небольших контекстов, 
 #     stack_my_close - пошаговый расчет (считает только одну часть концептов)
     lat.in_close(0, 0, 0)
-#     lat.stack_my_close(5)
+    lat.stack_my_close(5)
     # lat.my_close(0, set(lat.context.index))
     print("Генерация концептов --- %s seconds ---" % (time.time() - start_time))
     print(len(lat.concepts))
@@ -274,4 +317,5 @@ if __name__ == '__main__':
 #     построение решетки еще в работе обнаружена ошибка
 #     lat.fill_lattice()
 #     print("Построение решетки--- %s seconds ---" % (time.time() - start_time))
-    # bcd = lat.read_concepts(14)
+    bcd = lat.read_concepts(0)
+    check=lat.check_read_concepts()
