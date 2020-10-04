@@ -49,6 +49,7 @@ class fca_lattice:
         # выполнения запросов к ИАМ. Надо бы разделить ИАМ от простого АФП и от Ассоциативных правил.
         # self.lbl_lattice = nx.DiGraph()
 
+
     def is_cannonical(self, column, new_a, r):
         """
         Проверка концепта на каноничность. Классический алгоритм
@@ -62,6 +63,7 @@ class fca_lattice:
                 if new_a.issubset(self.context_derivation_1.iloc[i]):
                     return False
         return True
+
 
     def in_close(self, column: int, r: int, threshold=0.0):
         """
@@ -83,6 +85,7 @@ class fca_lattice:
                         self.concepts.append(new_concept)
                         self.in_close(j + 1, len(self.concepts) - 1, threshold)
 
+
     def __my_close__(self, column: int, concept_A: set, interval_number: int):
         """
         Оригинальный алгоритм поиска концептов в интервалах
@@ -103,7 +106,7 @@ class fca_lattice:
                     new_concept_a_len <= self.stack_intervals.loc[interval_number, 'right']):
                 if tp_concept_a not in self.concepts_set:
                     self.concepts_set.add(tp_concept_a)
-                    print('\r', len(self.concepts_set), end='')
+                    # print('\r', len(self.concepts_set), end='')
                     self.__my_close__(j + 1, new_concept_a, interval_number)
             elif (new_concept_a_len <= self.stack_intervals.loc[interval_number, 'left']) & (new_concept_a_len > 0):
                 # print('\r', new_concept_a_len, end='')
@@ -111,6 +114,7 @@ class fca_lattice:
                 # добавление параметров в стек вызова
                 if (tp_concept_a not in self.stack[ind]) or (self.stack[ind][tp_concept_a] > j+1):
                     self.stack[ind].update({tp_concept_a: j+1})
+
 
     def stack_my_close(self, step_count: int = 100):
         """
@@ -146,33 +150,30 @@ class fca_lattice:
             # выгрузка найденных концептов в файл, очистка списка концептов и стека вызова для интервала
             joblib.dump(self.concepts_set, ".\\result\\concepts_set" + str(i) + ".joblib")
             self.concepts_set.clear()
-            
-    def read_concepts(self,num_concept_set:int):
+
+
+    def read_concepts(self,num_concept_set:int, concepts_clear:bool = False):
         """
-        Загрузка концептов расчитанных пошагово. Надо подумть как лучше сделать ,если количество шагов расчета
-        не является свойстом решетки, а задается параметром
-        :param num_concept_set:
+        Загрузка концептов расчитанных пошагово. Функция генерирует множество концептов concepts для заданного интервала.
+        Если номер интервала загрузки не входит в интервал [0, stack_intervals_count-1],
+        то выполнение функции прерывается. Если значние параметра concepts_clear
+        true, то предварительно очищаем множество концептов решетки. Позволяет пошагово загружать большое концепты для
+        больших решеток.
+        :param num_concept_set: номер интервала для загрузки концептов
+        :param concepts_clear: признак предварительной очистки множества концептов
         :return:
         """
+        if self.stack_intervals_count-1 < num_concept_set:
+            return
         #выгрузка
         load_joblib = joblib.load(".\\result\\concepts_set" + str(num_concept_set) + ".joblib")
         #проверка на пустую выгрузку
         if load_joblib!=set():
-            load_joblib = set(list(load_joblib)[0])
-            B=set(self.context_derivation_0.index)
-            B=load_joblib.intersection(B)
-            B=self.context_derivation_0[list(B)].values
-            B=list(B)
-            final_B=B[0]
-            for i in B:
-                final_B=final_B.intersection(i)
-            self.concepts = [{'A': set(load_joblib), 'B': final_B}]
-        elements_index=list(self.concepts[0]['A'])
-        elements_column=list(self.concepts[0]['B'])
-        return self.context[elements_column].loc[elements_index]
-
-
-    # def stack_concepts_repair(self, ):
+            if concepts_clear:
+                self.concepts.clear()
+            for tp_concept_a in load_joblib:
+                tp_concept_b = set.intersection(*[self.context_derivation_0[j] for j in tp_concept_a])
+                self.concepts.append({'A': set(tp_concept_a), 'B': tp_concept_b})
 
 
     def derivation(self, q_val: str, axis=0):
@@ -189,6 +190,7 @@ class fca_lattice:
             # поиск по показателям (строкам)
             tmp_df = self.context.loc[q_val, :]
         return set(tmp_df[tmp_df == 1].index)
+
 
     def fill_lattice(self):
         """
@@ -265,11 +267,12 @@ if __name__ == '__main__':
     start_time = time.time()
 #     Вызов процедуры расчета решетки. in_close - классический расчет для небольших контекстов, 
 #     stack_my_close - пошаговый расчет (считает только одну часть концептов)
-    lat.in_close(0, 0, 0)
-#     lat.stack_my_close(5)
+#     lat.in_close(0, 0, 0)
+    lat.stack_my_close(5)
     # lat.my_close(0, set(lat.context.index))
     print("Генерация концептов --- %s seconds ---" % (time.time() - start_time))
     print(len(lat.concepts))
+    lat.read_concepts(0)
     # start_time = time.time()
 #     построение решетки еще в работе обнаружена ошибка
 #     lat.fill_lattice()
