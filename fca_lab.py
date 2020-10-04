@@ -49,7 +49,6 @@ class fca_lattice:
         # выполнения запросов к ИАМ. Надо бы разделить ИАМ от простого АФП и от Ассоциативных правил.
         # self.lbl_lattice = nx.DiGraph()
 
-
     def is_cannonical(self, column, new_a, r):
         """
         Проверка концепта на каноничность. Классический алгоритм
@@ -63,7 +62,6 @@ class fca_lattice:
                 if new_a.issubset(self.context_derivation_1.iloc[i]):
                     return False
         return True
-
 
     def in_close(self, column: int, r: int, threshold=0.0):
         """
@@ -84,7 +82,6 @@ class fca_lattice:
                         new_concept['B'].add(self.context.columns[j])
                         self.concepts.append(new_concept)
                         self.in_close(j + 1, len(self.concepts) - 1, threshold)
-
 
     def __my_close__(self, column: int, concept_A: set, interval_number: int):
         """
@@ -107,14 +104,13 @@ class fca_lattice:
                 if tp_concept_a not in self.concepts_set:
                     self.concepts_set.add(tp_concept_a)
                     # print('\r', len(self.concepts_set), end='')
-                    self.__my_close__(j + 1, new_concept_a, interval_number)
-            elif (new_concept_a_len <= self.stack_intervals.loc[interval_number, 'left']) & (new_concept_a_len > 0):
+                    self.__my_close__(j + 1, new_concept_a, step_n)
+            elif (new_concept_a_len < self.stack_intervals.loc[step_n, 'left']) & (new_concept_a_len > 0):
                 # print('\r', new_concept_a_len, end='')
                 ind = self.stack_intervals[(self.stack_intervals['left'] < new_concept_a_len) & (self.stack_intervals['right'] >= new_concept_a_len)].index.values[0]
                 # добавление параметров в стек вызова
                 if (tp_concept_a not in self.stack[ind]) or (self.stack[ind][tp_concept_a] > j+1):
                     self.stack[ind].update({tp_concept_a: j+1})
-
 
     def stack_my_close(self, step_count: int = 100):
         """
@@ -190,7 +186,6 @@ class fca_lattice:
             # поиск по показателям (строкам)
             tmp_df = self.context.loc[q_val, :]
         return set(tmp_df[tmp_df == 1].index)
-
 
     def fill_lattice(self):
         """
