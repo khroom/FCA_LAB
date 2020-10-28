@@ -1,0 +1,154 @@
+,,min,max
+APG,APG_0,0.0,47145.0814252989
+APG,APG_1,47145.0814252989,67771.05454886709
+AlF3: kol-vo doz v avt.rezh.,AlF3: kol-vo doz v avt.rezh._0,0.0,47.4050054047654
+AlF3: kol-vo doz v avt.rezh.,AlF3: kol-vo doz v avt.rezh._1,47.4050054047654,81.2657235510264
+AlF3: kol-vo doz v avt.rezh.,AlF3: kol-vo doz v avt.rezh._2,81.2657235510264,108.35429806803519
+AlF3: kol-vo doz v avt.rezh.,AlF3: kol-vo doz v avt.rezh._3,108.35429806803519,291.2021760578447
+AlF3: ustavka pitaniia,AlF3: ustavka pitaniia_0,5.0,471.9988884398808
+AlF3: ves dozy,AlF3: ves dozy_0,0.6,0.7256423593438963
+AlF3: ves dozy,AlF3: ves dozy_1,0.7256423593438963,0.8153869017323937
+AlF3: ves dozy,AlF3: ves dozy_2,0.8153869017323937,1.5871899662734748
+Cr. dobavka po shumam,Cr. dobavka po shumam_0,0.0,0.1508335353811449
+Cr. dobavka pri zamene,Cr. dobavka pri zamene_0,0.0,0.03126380523378942
+Cr. dobavka pri zamene,Cr. dobavka pri zamene_1,0.03126380523378942,0.04242944996014279
+Cr. dobavka pri zamene,Cr. dobavka pri zamene_2,0.04242944996014279,0.09155828675609755
+Cr. vremennaia dobavka,Cr. vremennaia dobavka_0,0.0,0.2475990786771208
+Dlit. shuma,Dlit. shuma_0,0.0,23.687036454602325
+Dlitelnost vylivki,Dlitelnost vylivki_0,1.0,23.190639772580344
+Dlitelnost vylivki,Dlitelnost vylivki_1,23.190639772580344,24.115249763104526
+Dlitelnost vylivki,Dlitelnost vylivki_2,24.115249763104526,28.738299715725436
+Dlitelnost vylivki,Dlitelnost vylivki_3,28.738299715725436,70.34574928931357
+Dob. napr.,Dob. napr._0,0.0,1.9752613515325765
+Dobavka k ust. po T elektrolita,Dobavka k ust. po T elektrolita_0,-0.07200000000000001,0.014442534284721099
+Dobavka k ust. po T elektrolita,Dobavka k ust. po T elektrolita_1,0.014442534284721099,0.10088506856944221
+Doza glinozema,Doza glinozema_0,5.3,6.068097995087309
+Doza glinozema,Doza glinozema_1,6.068097995087309,6.177826280099782
+Doza glinozema,Doza glinozema_2,6.177826280099782,6.287554565112255
+Doza glinozema,Doza glinozema_3,6.287554565112255,6.9459242751870915
+Doza glinozema,Doza glinozema_4,6.9459242751870915,8.701576835386655
+Doza glinozema,Doza glinozema_5,8.701576835386655,10.89614253563611
+El-lit: CaF2,El-lit: CaF2_0,4.31,5.184694122894645
+El-lit: CaF2,El-lit: CaF2_1,5.184694122894645,5.526965736201245
+El-lit: CaF2,El-lit: CaF2_2,5.526965736201245,5.945297708020424
+El-lit: CaF2,El-lit: CaF2_3,5.945297708020424,6.743931472402491
+El-lit: KO,El-lit: KO_0,2.02,2.2790332751329934
+El-lit: KO,El-lit: KO_1,2.2790332751329934,2.4466430413955185
+El-lit: KO,El-lit: KO_2,2.4466430413955185,2.7361508194853346
+El-lit: MgF2,El-lit: MgF2_0,0.2,0.5701254062318682
+El-lit: MgF2,El-lit: MgF2_1,0.5701254062318682,0.6688255145603664
+El-lit: MgF2,El-lit: MgF2_2,0.6688255145603664,0.7675256228888646
+El-lit: MgF2,El-lit: MgF2_3,0.7675256228888646,1.2486886509902955
+El-lit: temp-ra,El-lit: temp-ra_0,923.0,965.5998083281393
+El-lit: temp-ra,El-lit: temp-ra_1,965.5998083281393,1070.5779074224824
+El-t: uroven (fakt),El-t: uroven (fakt)_0,8.0,11.861566651404825
+El-t: uroven (fakt),El-t: uroven (fakt)_1,11.861566651404825,13.577818496473636
+El-t: uroven (fakt),El-t: uroven (fakt)_2,13.577818496473636,20.871888838016083
+El-t: uroven (fakt),El-t: uroven (fakt)_3,20.871888838016083,39.75065913377307
+Int. mezhdu vyl. i zam. anoda,Int. mezhdu vyl. i zam. anoda_0,0.1,9.22165940401499
+Int. mezhdu vyl. i zam. anoda,Int. mezhdu vyl. i zam. anoda_1,9.22165940401499,148.1928232651849
+Int. mezhdu zam. i vyl.,Int. mezhdu zam. i vyl._0,0.1,1.2208944995312208
+Int. mezhdu zam. i vyl.,Int. mezhdu zam. i vyl._1,1.2208944995312208,4.30335437324208
+Int. mezhdu zam. i vyl.,Int. mezhdu zam. i vyl._2,4.30335437324208,27.842138863397672
+Int. mezhdu zam. i zas. anoda,Int. mezhdu zam. i zas. anoda_0,0.0,1.9668932158901506
+Int. mezhdu zam. i zas. anoda,Int. mezhdu zam. i zas. anoda_1,1.9668932158901506,4.425509735752839
+Int. mezhdu zam. i zas. anoda,Int. mezhdu zam. i zas. anoda_2,4.425509735752839,6.884126255615525
+Int. mezhdu zam. i zas. anoda,Int. mezhdu zam. i zas. anoda_3,6.884126255615525,61.465412996567046
+Kol-vo doz APG v avt.rezh.,Kol-vo doz APG v avt.rezh._0,0.0,5660.34060278052
+Kol-vo doz APG v avt.rezh.,Kol-vo doz APG v avt.rezh._1,5660.34060278052,6492.743632601187
+Kol-vo doz APG v avt.rezh.,Kol-vo doz APG v avt.rezh._2,6492.743632601187,7491.627268385986
+Kol-vo doz APG v avt.rezh.,Kol-vo doz APG v avt.rezh._3,7491.627268385986,11487.161811525166
+Kol-vo doz APG v nedopitke,Kol-vo doz APG v nedopitke_0,9.0,1464.2630968927688
+Kol-vo doz APG v nedopitke,Kol-vo doz APG v nedopitke_1,1464.2630968927688,2057.1480622935273
+Kol-vo doz APG v nominale,Kol-vo doz APG v nominale_0,0.0,2003.1604944820633
+Kol-vo doz APG v nominale,Kol-vo doz APG v nominale_1,2003.1604944820633,2270.2485604130047
+Kol-vo doz APG v nominale,Kol-vo doz APG v nominale_2,2270.2485604130047,3472.144857102241
+Kol-vo doz APG v nominale,Kol-vo doz APG v nominale_3,3472.144857102241,6944.289714204489
+Kol-vo doz APG v perepitke,Kol-vo doz APG v perepitke_0,45.0,2536.9227458750565
+Kol-vo doz APG v perepitke,Kol-vo doz APG v perepitke_1,2536.9227458750565,5028.84549175011
+Kol-vo doz APG v teste,Kol-vo doz APG v teste_0,0.0,51.176885999638635
+Kol-vo doz APG v teste,Kol-vo doz APG v teste_1,51.176885999638635,777.8886671945066
+Kol-vo nedopitok,Kol-vo nedopitok_0,0.0,17.77316534041885
+Kol-vo nedopitok,Kol-vo nedopitok_1,17.77316534041885,29.782060840701817
+Kol-vo perepitok,Kol-vo perepitok_0,0.0,15.791149070693693
+Kol-vo perepitok,Kol-vo perepitok_1,15.791149070693693,25.978987180818663
+Kol-vo testov,Kol-vo testov_0,0.0,4.682478166286329
+Kol-vo testov,Kol-vo testov_1,4.682478166286329,10.702807237225896
+Metall kovshei: Fe,Metall kovshei: Fe_0,0.0188,0.035862511909745536
+Metall kovshei: Fe,Metall kovshei: Fe_1,0.035862511909745536,0.048659395842054684
+Metall kovshei: Fe,Metall kovshei: Fe_2,0.048659395842054684,0.08705004763898211
+Metall kovshei: Fe,Metall kovshei: Fe_3,0.08705004763898211,0.6671754525703297
+Metall kovshei: Si,Metall kovshei: Si_0,0.0244,0.04747494408093653
+Metall kovshei: Si,Metall kovshei: Si_1,0.04747494408093653,0.3628325131870695
+Metall: uroven,Metall: uroven_0,0.0,19.725411654779993
+Metall: uroven,Metall: uroven_1,19.725411654779993,59.61457744555731
+Metall: uroven (rasch.),Metall: uroven (rasch.)_0,0.0,19.671043255980948
+Metall: uroven (rasch.),Metall: uroven (rasch.)_1,19.671043255980948,59.90726809775997
+Napr. el-ra,Napr. el-ra_0,2.331,3.8277227305103314
+Napr. el-ra,Napr. el-ra_1,3.8277227305103314,18.306888275664498
+Napr. oshin.,Napr. oshin._0,0.039000595,0.39980001022898015
+Napr. oshin.,Napr. oshin._1,0.39980001022898015,0.7090566518538205
+Napr. oshin.,Napr. oshin._2,0.7090566518538205,0.8894563594683107
+Napr. oshin.,Napr. oshin._3,0.8894563594683107,0.9925419066765908
+Napr. priv.,Napr. priv._0,0.056,3.8707509847882378
+Napr. priv.,Napr. priv._1,3.8707509847882378,6.884875219682621
+Napr. zad.,Napr. zad._0,3.593,3.655898127692719
+Napr. zad.,Napr. zad._1,3.655898127692719,3.734520787308618
+Napr. zad.,Napr. zad._2,3.734520787308618,5.668638213859733
+Obr. EDS,Obr. EDS_0,0.969,1.1458460087444755
+Obr. EDS,Obr. EDS_1,1.1458460087444755,1.570276429731217
+Obr. EDS,Obr. EDS_2,1.570276429731217,1.7824916402245878
+Obr. EDS,Obr. EDS_3,1.7824916402245878,1.853230043722378
+Obr. EDS,Obr. EDS_4,1.853230043722378,2.2776604647091196
+RMPR: dlit. MAINA,RMPR: dlit. MAINA_0,1.0,8.188699988540169
+RMPR: dlit. MAINA,RMPR: dlit. MAINA_1,8.188699988540169,11.783049982810255
+RMPR: dlit. MAINA,RMPR: dlit. MAINA_2,11.783049982810255,13.580224979945298
+RMPR: dlit. MAINA,RMPR: dlit. MAINA_3,13.580224979945298,27.95762495702563
+RMPR: dlit. MAINA,RMPR: dlit. MAINA_4,27.95762495702563,110.62767482523768
+RMPR: dlit. VIRA,RMPR: dlit. VIRA_0,1.0,8.063522672474324
+RMPR: dlit. VIRA,RMPR: dlit. VIRA_1,8.063522672474324,22.190568017422965
+RMPR: dlit. VIRA,RMPR: dlit. VIRA_2,22.190568017422965,128.14340810453797
+RMPR: koeff.,RMPR: koeff._0,20.1,23.401195875916976
+RMPR: koeff.,RMPR: koeff._1,23.401195875916976,31.65418556570941
+RMPR: koeff.,RMPR: koeff._2,31.65418556570941,56.41315463508661
+RMPR: kol-vo MAINA,RMPR: kol-vo MAINA_0,0.0,3.753084872459857
+RMPR: kol-vo MAINA,RMPR: kol-vo MAINA_1,3.753084872459857,9.758020668395627
+RMPR: kol-vo MAINA,RMPR: kol-vo MAINA_2,9.758020668395627,45.78763544401022
+RMPR: kol-vo VIRA,RMPR: kol-vo VIRA_0,0.0,4.294935445506191
+RMPR: kol-vo VIRA,RMPR: kol-vo VIRA_1,4.294935445506191,13.743793425619806
+RMPR: kol-vo VIRA,RMPR: kol-vo VIRA_2,13.743793425619806,58.41112205888426
+RMPR: vremia v ruch.rezh.,RMPR: vremia v ruch.rezh._0,0.0,23.78501390215395
+RMPR: vremia zapreta,RMPR: vremia zapreta_0,0.0,23.759836686688512
+Shum,Shum_0,0.001,0.014378297122519758
+Shum,Shum_1,0.014378297122519758,0.01705395654702371
+Shum,Shum_2,0.01705395654702371,1.092669045197614
+Tsel. KO,Tsel. KO_0,2.25,2.347956486884283
+Tsel. KO,Tsel. KO_1,2.347956486884283,2.6945717481671307
+Tsel. napr. el-ra,Tsel. napr. el-ra_0,3.63,3.788010279739141
+Tsel. napr. el-ra,Tsel. napr. el-ra_1,3.788010279739141,6.691449169945921
+Tsel. temp. el-ta,Tsel. temp. el-ta_0,962.0,999.8365486971917
+Upravlenie: temp-ra el-ta,Upravlenie: temp-ra el-ta_0,923.0,965.7150657155823
+Upravlenie: temp-ra el-ta,Upravlenie: temp-ra el-ta_1,965.7150657155823,998.4632827641955
+Upravlenie: temp-ra likv.,Upravlenie: temp-ra likv._0,903.0,957.48573769518
+Upravlenie: temp-ra likv.,Upravlenie: temp-ra likv._1,957.48573769518,998.350040966565
+Upravlenie: temp-ra peregreva,Upravlenie: temp-ra peregreva_0,-29.0,9.185923482850924
+Upravlenie: temp-ra peregreva,Upravlenie: temp-ra peregreva_1,9.185923482850924,72.82912928760254
+Ustavka APG,Ustavka APG_0,1.0,1.3704174754596834
+Ustavka APG,Ustavka APG_1,1.3704174754596834,1.4815427180975884
+Ustavka APG,Ustavka APG_2,1.4815427180975884,7.371180577906586
+Vremia APG v ruch.rezh.,Vremia APG v ruch.rezh._0,0.0,23.887558918147178
+Vremia na golod.,Vremia na golod._0,0.0,171.1246054484997
+Vremia otkl. APG,Vremia otkl. APG_0,0.0,23.892388997710203
+Vremia pitaniia po bazovoi ustavke,Vremia pitaniia po bazovoi ustavke_0,0.2,10.08857287116547
+Vremia pitaniia po bazovoi ustavke,Vremia pitaniia po bazovoi ustavke_1,10.08857287116547,23.932574890797127
+Vremia v nedopitke,Vremia v nedopitke_0,0.1,7.869113136699081
+Vremia v nedopitke,Vremia v nedopitke_1,7.869113136699081,12.308606357669998
+Vremia v perepitke,Vremia v perepitke_0,0.1,6.639564470159262
+Vremia v perepitke,Vremia v perepitke_1,6.639564470159262,10.99927411693211
+Vremia v teste,Vremia v teste_0,0.0,1.177323869519494
+Vremia v teste,Vremia v teste_1,1.177323869519494,7.5871982702367475
+Vremia zapreta APG,Vremia zapreta APG_0,0.0,23.879995933960974
+Vylivka: L/O,Vylivka: L/O_0,780.0,4374.793812092425
+Vylivka: L/O,Vylivka: L/O_1,4374.793812092425,20156.81542615668
+Vylivka: zadanie,Vylivka: zadanie_0,1000.0,3968.54191615496
+Vylivka: zadanie,Vylivka: zadanie_1,3968.54191615496,10095.107147368395
