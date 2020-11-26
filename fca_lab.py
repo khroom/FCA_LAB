@@ -161,7 +161,7 @@ class fca_lattice:
         """
         if self.stack_intervals_count-1 < num_concept_set:
             return
-        #выгрузка
+        #выгрузка из файла
         load_joblib = joblib.load(".\\result\\concepts_set" + str(num_concept_set) + ".joblib")
         #проверка на пустую выгрузку
         if load_joblib!=set():

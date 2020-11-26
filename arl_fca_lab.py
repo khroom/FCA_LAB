@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import joblib
 from networkx.drawing.nx_agraph import graphviz_layout
 from fca_lab import fca_lattice
+import arl_binarization
 
 
 class arl_fca_lab:
@@ -16,9 +17,14 @@ class arl_fca_lab:
         :param param: Целевой параметр из числа столбцов df. По умолчанию пустая строка.
         :param obj_columns: Список названий столбцов, относящихся к описанию объекта наблюдения
         """
+        """
+        Пересмотреть объявление
+        """
         self.df = df
         self.param = goal_param
         self.obj_columns = obj_columns
+
+
         """
         Подготовка контекста для расчета решетки - pdf. Из исходного датасета описательные столбцы,
         которые не содержат числовых параметров и относятся к описанию объектов исследования. Оставляем только
@@ -28,6 +34,18 @@ class arl_fca_lab:
         # Инициализация решетки по урезанному контексту
         self.lat = fca_lattice(self.pdf)
 
+        """ 
+        Датафрейм оценок концептов. 
+        Можно было бы совместить с self.lat.concepts, но это список и во вложеном объекте.
+        Важно формировать после расчета концептов.
+        """
+        self.concepts_df = pd.DataFrame(index=range(len(self.lat.concepts)),
+                                   columns=['param_support', 'support', 'confidence', 'lift', 'cardinality', 'intent'])
+
+    def learn_model(self, df: pd.DataFrame,  defect: list, obj_column: str, parse_dates: str, bin_type: arl_binarization.BinarizationType = arl_binarization.BinarizationType.HISTOGRAMS, ind_type: bool = True, keep_nan=True, days_before_defect=1):
+        self.arl_binary_matrix = arl_binarization.arl_binary_matrix()
+
+
     def concepts_evaluation(self):
         """
         Рассчет параметров для концептов относительно исходного контекста.
@@ -36,51 +54,31 @@ class arl_fca_lab:
         df_derivation = pd.Series(index=self.lat.context.columns, dtype='object')
         for col in df_derivation.index:
             df_derivation.loc[col] = set(self.df.loc[:, col][self.df.loc[:, col] == 1].index)
-        param_fraction = len(self.df[self.df[self.param] == 1])/len(self.df)
-        concepts_df = pd.DataFrame(index=range(len(self.lat.concepts)),
-                                   columns=['param_support', 'support', 'confidence', 'lift', 'cardinality', 'intent'])
+        param_fraction = len(self.df[self.df[self.param] == 1]) / len(self.df)
+
         df_len = len(self.df)
         pdf_len = len(self.pdf)
 
         for i in range(len(self.lat.concepts)):
-            # Мощность содержания для левой части правила (без целевого параметра)
-            self.lat.concepts[i]['left_extent'] = len(
-                set.intersection(*[df_derivation[j] for j in self.lat.concepts[i]['B'].difference({self.param})]))
-            # Можность содержания для всего правила (с целевым параметром)
-            self.lat.concepts[i]['rule_extent'] = len(self.lat.concepts[i]['A'])
-            # Поддержка по нарушениям
-            concepts_df.loc[i, 'param_support'] = self.lat.concepts[i]['rule_extent'] / pdf_len
-            # Поддержка правила
-            concepts_df.loc[i, 'support'] = self.lat.concepts[i]['rule_extent']/df_len
-            # Мощность объема левой части правила
-            concepts_df.loc[i, 'cardinality'] = len(self.lat.concepts[i]['B'])
-            # Достоверность правила, как часто срабатывает
-            concepts_df.loc[i,'confidence'] = self.lat.concepts[i]['rule_extent']/self.lat.concepts[i]['left_extent']
-            # Поддержка, вклад левой части в вероятность правой части
-            concepts_df.loc[i, 'lift'] = concepts_df.loc[i,'confidence']/param_fraction
-            # Количество нарушений покрытых правилом
-            concepts_df.loc[i, 'intent'] = len(self.lat.concepts[i]['A'])
-
-        return concepts_df
-
-    """
-    def concepts_evaluation(self, objects: pd.DataFrame, rule_weight_threshold: float):
-    """
-        # Еще одна оценка концептов онтосительно ванн. Попыталась сделать универсальный механизм для оценки концептов
-        # относительно объектов (ванн в нашем случае)
-        # :param objects: дополнительный столбцы
-        # :param rule_weight_threshold: порог для отображения правил. Рассчитываем оценку только для весомых правил.
-        # :return: Датафрейм оценок
-    """
-        df = objects
-        for i in range(len(self.concepts)):
-            rule_weight = self.concepts[i]['rule_extent'] / self.concepts[i]['left_extent']
-            if rule_weight > rule_weight_threshold:
-                df = pd.concat([df, pd.Series(name=i, dtype="float64")], axis=1)
-                for obj_id in set.intersection(*[self.context_derivation_1[j] for j in self.concepts[i]['B']]):
-                    df.loc[obj_id, i] = rule_weight
-        return df
-    """
+            if (self.lat.concepts[i]['B'].difference({self.param}) != set()) and (self.lat.concepts[i]['A'] != set()):
+                # Мощность содержания для левой части правила (без целевого параметра). Обязательно
+                self.lat.concepts[i]['left_extent'] = len(
+                    set.intersection(*[df_derivation[j] for j in self.lat.concepts[i]['B'].difference({self.param})]))
+                # Можность содержания для всего правила (с целевым параметром). Обязательно
+                self.lat.concepts[i]['rule_extent'] = len(self.lat.concepts[i]['A'])
+                # Поддержка по нарушениям. Опционально
+                self.concepts_df.loc[i, 'param_support'] = self.lat.concepts[i]['rule_extent'] / pdf_len
+                # Поддержка правила. Опционально
+                self.concepts_df.loc[i, 'support'] = self.lat.concepts[i]['rule_extent'] / df_len
+                # Мощность содержания левой части правила. Опционально
+                self.concepts_df.loc[i, 'cardinality'] = len(self.lat.concepts[i]['B']) - 1
+                # Достоверность правила, как часто срабатывает. Опционально
+                self.concepts_df.loc[i, 'confidence'] = self.lat.concepts[i]['rule_extent'] / self.lat.concepts[i][
+                    'left_extent']
+                # Поддержка, вклад левой части в вероятность правой части. Опционально
+                self.concepts_df.loc[i, 'lift'] = self.concepts_df.loc[i, 'confidence'] / param_fraction
+                # Количество нарушений покрытых правилом. Опционально
+                self.concepts_df.loc[i, 'extent'] = len(self.lat.concepts[i]['A'])
 
 
     def rules_describe(self, weight_df: pd.DataFrame):
@@ -100,56 +98,82 @@ class arl_fca_lab:
             print('Количество ванн:', df[i].count())
             print('---')
 
-    def rules_scatter(self, weight_df: pd.DataFrame, alpha=1, s=10):
+    def rules_scatter(self, how: ['show', 'save'] = 'show', alpha=0.8, s=50):
         """
         Диаграмма рассеяния для весомых правил
+        :param how: показывать или сохранить диаграмму в файл
         :param weight_df: Датафрейм оценок в разрезе ванн
         :param alpha: прозрачность
         :param s: размер маркеров
         :return:
         """
-        sc_df = weight_df.iloc[:, 2:]
-        sc_df.index = range(len(weight_df.index))
-        sc_df.columns = range(len(sc_df.columns))
-        df_stack = sc_df.stack()
-        df_stack = df_stack.reset_index()
-        df_stack.columns = [self.param, 'RULE', 'WEIGHT']
-        plt.clf()
-        plt.scatter(x=list(df_stack[self.param]), y=list(df_stack['RULE']), c=list(df_stack['WEIGHT']), cmap='viridis',
-                    alpha=1, s=10, label=list(df_stack['WEIGHT']))
-        # plt.legend()
-        plt.savefig('scatter.png')
+        fig, ax = plt.subplots()
+        # fig = plt.figure(figsize=(9, 9))
+        weight_df = self.concepts_df.sort_values(by='cardinality', axis=0)
+        scatter = ax.scatter(x=weight_df['confidence'], y=weight_df['extent'], c=weight_df['cardinality'],
+                             cmap='viridis', alpha=alpha, s=s, label=weight_df['cardinality'])
+        legend1 = ax.legend(*scatter.legend_elements(), loc="upper right", title="cardinality")
+        ax.add_artist(legend1)
+        plt.xlabel("Confidence")
+        plt.ylabel("Extent")
+        if how == 'show':
+            plt.show()
+        else:
+            plt.savefig('scatter.png')
 
+    def get_prediction(self, row_set: set):
+        weight_df = self.concepts_df.sort_values(by='confidence', axis=0, ascending=False)
+        for i in weight_df.index:
+            if self.lat.concepts[i]['B'].difference(row_set) == {self.param}:
+                return weight_df.loc[i,'confidence']
+                break
+        return 0
+
+def get_row(df: pd.DataFrame, num: int = 0):
+    row = df.iloc[num,2:-2]
+    row_set = set()
+    for (k, v) in row.items():
+        if v:
+            row_set.add(k)
+    return row_set
 
 if __name__ == '__main__':
     start_time = time.time()
-    binary = pd.read_csv('.\\haz_binary\\10_binary_stddev_true_anomalies_only.csv', index_col=0, sep=',')
-    # binary = pd.read_csv('IAM.csv',index_col=0)
-    param = ''
-    binary.drop(['KONUSOV'], axis='columns')
-    arl = arl_fca_lab(binary, ['VANNA', 'RDATE'], 'DAY_BEFORE_KONUS')
+
+    # df = pd.read_csv('.\\saz_binary\\CAZ_binary_stdev_individual_true.csv', index_col=0, sep=',')
+    # param = 'Konus (da/net)'
+
+    df = pd.read_csv('.\\saz_binary\\Saz_histogramms_binary.csv', index_col=0, sep=',')
+    range_df = pd.read_csv('.\\saz_binary\\Saz_histogramm_ranges.csv', index_col=0, sep=',')
+    df = df.drop(columns='Konus (da/net)')
+    param = 'DAY_BEFORE_KONUS'
+
+    binary = df[df['VANNA'] == 0]
+    arl = arl_fca_lab(binary, ['VANNA', 'RDATE'], param)
     print("Загрузка --- %s seconds ---" % (time.time() - start_time))
     start_time = time.time()
-    # arl.lat.in_close(0, 0, 0)
-    arl.lat.stack_my_close(100)
+    arl.lat.in_close(0, 0, 0)
     print("Генерация концептов --- %s seconds ---" % (time.time() - start_time))
-    arl.lat.concepts.clear()
-    for i in range(1, 100):
-        arl.lat.read_concepts(i,False)
-    concepts_df = arl.concepts_evaluation()
-    confidence_df = concepts_df[concepts_df.lift > 1]
-    fig, ax = plt.subplots()
-    # fig = plt.figure(figsize=(9, 9))
-    scatter = ax.scatter(x=confidence_df['confidence'], y=confidence_df['intent'], c=confidence_df['cardinality'],
-                         cmap='viridis', alpha=.6, s=50, label=confidence_df['cardinality'])
-    legend1 = ax.legend(*scatter.legend_elements(), loc="upper right", title="cardinality")
-    ax.add_artist(legend1)
-    plt.xlabel("Confidence")
-    plt.ylabel("Intent")
-    # plt.show()
-    plt.savefig('scatter.png')
+    # arl.lat.concepts.clear()
+    # for i in range(1, 100):
+    #     arl.lat.read_concepts(i,False)
+    arl.concepts_evaluation()
+
+    # arl.rules_scatter(concepts_df[concepts_df.lift > 1])
+    print(len(arl.lat.concepts))
+    print(len(binary[binary[param] == 1]))
+
+    count_df = pd.DataFrame(index = binary.index, columns=['Prediction', 'Fact'])
+    for i in binary.index:
+        count_df.loc[i, 'Prediction'] = arl.get_prediction(get_row(binary, i))
+        count_df.loc[i, 'Fact'] = binary.iloc[i, -1]
+
 
     """
+for i in set.difference(arl.lat.concepts[3]['B'], {'DAY_BEFORE_KONUS'}):
+...     print(range_df[range_df.interval == i].index.values[0])
+...     print(range_df[range_df.interval == i]['min'].values[0], ' - ', range_df[range_df.interval == i]['max'].values[0])
+    
     confidence_df = concepts_df[(concepts_df.lift > 1)&(concepts_df.confidence > 0.6)&(concepts_df.confidence < 0.8)]
     
     for i in confidence_df.index:
