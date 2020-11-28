@@ -3,65 +3,77 @@ import pandas as pd
 import math
 import datetime
 from enum import Enum
-
+import joblib
 
 class BinarizationType(Enum):
-    STDDEV_INDIVIDUAL = 0
-    STDDEV_COMMON = 1
-    QUARTILES = 2
-    HISTOGRAMS = 3
+    STDDEV = 0
+    QUARTILES = 1
+    HISTOGRAMS = 2
 
 
 class arl_binary_matrix:
-    def __init__(self, df: pd.DataFrame, bin_type: BinarizationType, defect: list, cell_column, nan_cols=True,
-                 days_before_defect=1):
+    def __init__(self, df: pd.DataFrame, defect, obj_column: str, parse_dates: str, bin_type: BinarizationType, ind_type: bool = True, keep_nan=True, days_before_defect=1):
         """
         Разбивает исходные значения параметров на группы в соответствии с выбранным методом.
         Строит бинарную матрицу (self.binary) по вхождению значений параметров в группы.
         Предоставляет интервалы значений для групп (self.ranges).
         :param df: Фрейм исходных данных. Предполагается, что фрейм имеет сложный индекс, содержащий номер электролизера
          и дату измерения.
+                для электролизеров, квартили, пересечения гистограмм выборок "чистых" и "с нарушениями")
+        :param defect: Наименование целевого параметра или список целевых параметров
+        :param obj_column: Столбец с номером электролизера
+        :param parse_dates: Столбец с датой
         :param bin_type: Тип бинаризации (стандартное отклонение параметров, индивидуальное стандартное отклонение
-        для электролизеров, квартили, пересечения гистограмм выборок "чистых" и "с нарушениями")
-        :param defect: Список, содержащий целевой параметр(ы)
-        :param cell_column: Наименование электролизера в индексе
-        :param nan_cols: Будет ли бинарная матрица содержать стобцы для NaN значений параметров
+        :param ind_type: Бинаризовать индивидуально для каждого электролизра или нет
+        :param keep_nan: Будет ли бинарная матрица содержать стобцы для NaN значений параметров
         :param days_before_defect: Столбец бинарной матрицы для дня до конуса (days_before_defect=1 - один день до конуса)
         """
-        self.cell_column = cell_column
+        self.__obj_column = obj_column
+        self.bin_type = bin_type
+        if not isinstance(defect, list):
+            defect = [defect]
         data_events = df[defect]
         data_params = df.drop(defect, axis=1)
 
-        if bin_type == BinarizationType.STDDEV_INDIVIDUAL:
-            stats = data_params.groupby(cell_column).agg([np.min, np.mean, np.std, np.max])
-            boundaries = self.get_boundaries_by_stat(stats)
-            full_df = self.concat_data_boundaries(data_params, boundaries)
-            classified_data = self.classify_by_std(full_df)
-
-        if bin_type == BinarizationType.STDDEV_COMMON:
-            stats = data_params.agg([np.min, np.mean, np.std, np.max])
-            stats = pd.concat([stats], keys=['0'], names=['all']).unstack()
-            boundaries = self.get_boundaries_by_stat(stats)
-            full_df = self.concat_data_boundaries(data_params, boundaries)
-            classified_data = self.classify_by_std(full_df)
+        if bin_type == BinarizationType.STDDEV:
+            if ind_type:
+                stats = data_params.groupby(obj_column).agg([np.min, np.mean, np.std, np.max])
+            else:
+                stats = data_params.agg([np.min, np.mean, np.std, np.max])
+                stats = pd.concat([stats], keys=['0'], names=['all']).unstack()
+            boundaries = self.__get_boundaries_by_stat(stats)
+            full_df = self.__concat_data_boundaries(data_params, boundaries)
+            classified_data = self.__classify_by_std(full_df)
 
         if bin_type == BinarizationType.QUARTILES:
-            stats = data_params.describe().loc[['min', '25%', '50%', '75%', 'max']]
-            stats = pd.concat([stats], keys=['0'], names=['all']).unstack()
-            boundaries = self.get_boundaries_by_quartiles(stats)
-            full_df = self.concat_data_boundaries(data_params, boundaries)
-            classified_data = self.classify_by_quartiles(full_df)
+            if ind_type:
+                stats = pd.DataFrame()
+                for group, data in data_params.groupby(obj_column):
+                    stats = stats.append(pd.concat([data.describe()], keys=[group], names=[obj_column]))
+                stats = stats.unstack()
+            else:
+                stats = data_params.describe()
+                stats = pd.concat([stats], keys=['0'], names=['all']).unstack()
+            boundaries = self.__get_boundaries_by_quartiles(stats)
+            full_df = self.__concat_data_boundaries(data_params, boundaries)
+            classified_data = self.__classify_by_quartiles(full_df)
 
         if bin_type == BinarizationType.HISTOGRAMS:
-            boundaries = self.get_boundaries_by_hist(data_params, data_events, day_before=days_before_defect)
+            if ind_type:
+                boundaries = pd.DataFrame()
+                for group, data in data_params.groupby(obj_column):
+                    boundaries = boundaries.append(pd.concat([self.get_boundaries_by_hist(data, data_events.loc[data.index], day_before=days_before_defect)], keys=[group], names=[obj_column]))
+                boundaries.index = boundaries.index.droplevel(1)
+            else:
+                boundaries = self.get_boundaries_by_hist(data_params, data_events, day_before=days_before_defect)
             full_df = self.concat_data_boundaries(data_params, boundaries)
             classified_data = self.classify_by_hist(full_df)
 
-        binary = self.get_binary(classified_data, nan_cols)
+        binary = self.get_binary(classified_data, keep_nan)
         self.binary = self.format_binary(binary, data_events, days_before_defect)
         self.ranges = self.get_ranges(boundaries)
 
-    def get_boundaries_by_stat(self, stats: pd.DataFrame):
+    def __get_boundaries_by_stat(self, stats: pd.DataFrame):
         """
         Расчет границ групп при разделении по стандартному отклонению
         :param stats: Фрейм статистических данных
@@ -76,7 +88,7 @@ class arl_binary_matrix:
         boundaries.columns = pd.MultiIndex.from_tuples(boundaries.columns)
         return boundaries
 
-    def get_boundaries_by_quartiles(self, stats: pd.DataFrame):
+    def __get_boundaries_by_quartiles(self, stats: pd.DataFrame):
         """
         Расчет границ групп при разделении по квартилям
         :param stats: Фрейм статистических данных
@@ -92,7 +104,7 @@ class arl_binary_matrix:
         boundaries.columns = pd.MultiIndex.from_tuples(boundaries.columns)
         return boundaries
 
-    def get_boundaries_by_hist(self, df: pd.DataFrame, data_events: pd.DataFrame, day_before=1, interval_width=5,
+    def __get_boundaries_by_hist(self, df: pd.DataFrame, data_events: pd.DataFrame, day_before=1, interval_width=5,
                                thres=0.1):
         """
         Расчет границ групп при разделении по пересечениям гистограмм выборок "чистых" и "с нарушениями"
@@ -163,7 +175,7 @@ class arl_binary_matrix:
         boundaries.index.name = 'all'
         return boundaries
 
-    def get_ranges(self, boundaries: pd.DataFrame):
+    def __get_ranges(self, boundaries: pd.DataFrame):
         """
         Формирование таблицы интервалов по границам
         :param boundaries: Таблица, содержащая границы групп для парамтров
@@ -183,7 +195,7 @@ class arl_binary_matrix:
             ranges.index = ranges.index.droplevel(0)
         return ranges
 
-    def concat_data_boundaries(self, data: pd.DataFrame, boundaries: pd.DataFrame):
+    def __concat_data_boundaries(self, data: pd.DataFrame, boundaries: pd.DataFrame):
         """
         Совмещение исходных параметров и границ, установленных с помощью выбранного метода бинаризации
         :param data: Фрейм исходных параметров
@@ -192,7 +204,7 @@ class arl_binary_matrix:
         """
         df = pd.concat([data], axis='columns', keys=['value'])
         df.columns = df.columns.swaplevel(0, 1)
-        if boundaries.index.name == self.cell_column:
+        if boundaries.index.name == self.obj_column:
             return df.join(boundaries)
         else:
             df = pd.concat([df], keys=['0'], names=['all'])
@@ -200,7 +212,7 @@ class arl_binary_matrix:
             df.index = df.index.droplevel(0)
             return df
 
-    def classify_by_std(self, df: pd.DataFrame):
+    def __classify_by_std(self, df: pd.DataFrame):
         """
         Классификация значений параметров по стандартному отклонению.
         Три интервала для каждого параметра. Граничные точки центрального интервала включены в центральынй интервал.
@@ -214,7 +226,7 @@ class arl_binary_matrix:
             classified.loc[df[(c, 'value')] > df[(c, 2)], c] = 2
         return classified
 
-    def classify_by_quartiles(self, df: pd.DataFrame):
+    def __classify_by_quartiles(self, df: pd.DataFrame):
         """
         Классификация значений параметров по вхождению в квартили.
         Четыре интервала для каждого параметра. Правая граничнае точка каждого интервала включена в интервал.
@@ -229,7 +241,7 @@ class arl_binary_matrix:
             classified.loc[df[(c, 'value')] > df[(c, 3)], c] = 3
         return classified
 
-    def classify_by_hist(self, df: pd.DataFrame):
+    def __classify_by_hist(self, df: pd.DataFrame):
         """
         Классификация значений параметров по пересечениям гистограмм выборок "чистых" и "с нарушениями".
         Разное количество интевалов для параметров. Классификации подлежат только параметры имеющие два и более интервалов.
@@ -246,7 +258,7 @@ class arl_binary_matrix:
                     i += 1
         return classified
 
-    def get_binary(self, df: pd.DataFrame, nan_cols=True):
+    def __get_binary(self, df: pd.DataFrame, nan_cols=True):
         """
         Формирование бинарной матрицы
         :param df: Фрейм, в тотором значениями параметров являются номера групп, к которым принадлежат исходные значение параметров.
@@ -266,7 +278,7 @@ class arl_binary_matrix:
                 binary.loc[data[c].isna(), c + '_NaN'] = 1
         return binary.dropna(how='all', axis='columns').fillna(0)
 
-    def format_binary(self, binary: pd.DataFrame(), data_events: pd.DataFrame(), days_before_defect):
+    def __format_binary(self, binary: pd.DataFrame(), data_events: pd.DataFrame(), days_before_defect):
         """
         Форматирование бинарной матрицы: добавление бинаризованных столбцов целевого параметра и дня до, сброс индекса.
         :param binary: Бинарная матрица
@@ -300,6 +312,5 @@ if __name__ == '__main__':
         df_saz.rename(columns={column: unidecode.unidecode(column).replace('\'', '')}, inplace=True)
     df_saz = df_saz.set_index(['Nomer elektrolizera','Data'])
 
-    bin_hist = arl_binary_matrix(df_saz, BinarizationType.HISTOGRAMS, ['Konus (sht)'], cell_column = 'Nomer elektrolizera')
-    bin_hist.binary.to_csv('saz_binary\\SAZ_binary_hist.csv')
-    bin_hist.ranges.to_csv('saz_binary\\SAZ_ranges_hist.csv')
+    bin_hist = arl_binary_matrix(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '', BinarizationType.QUARTILES)
+    # bin_hist.ranges.to_csv('D:\\SAZ_ranges_c.csv')
