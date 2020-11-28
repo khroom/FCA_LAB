@@ -3,7 +3,7 @@ import pandas as pd
 import math
 import datetime
 from enum import Enum
-import joblib
+# import joblib
 
 class BinarizationType(Enum):
     STDDEV = 0
@@ -62,16 +62,16 @@ class arl_binary_matrix:
             if ind_type:
                 boundaries = pd.DataFrame()
                 for group, data in data_params.groupby(obj_column):
-                    boundaries = boundaries.append(pd.concat([self.get_boundaries_by_hist(data, data_events.loc[data.index], day_before=days_before_defect)], keys=[group], names=[obj_column]))
+                    boundaries = boundaries.append(pd.concat([self.__get_boundaries_by_hist(data, data_events.loc[data.index], day_before=days_before_defect)], keys=[group], names=[obj_column]))
                 boundaries.index = boundaries.index.droplevel(1)
             else:
-                boundaries = self.get_boundaries_by_hist(data_params, data_events, day_before=days_before_defect)
-            full_df = self.concat_data_boundaries(data_params, boundaries)
-            classified_data = self.classify_by_hist(full_df)
+                boundaries = self.__get_boundaries_by_hist(data_params, data_events, day_before=days_before_defect)
+            full_df = self.__concat_data_boundaries(data_params, boundaries)
+            classified_data = self.__classify_by_hist(full_df)
 
-        binary = self.get_binary(classified_data, keep_nan)
-        self.binary = self.format_binary(binary, data_events, days_before_defect)
-        self.ranges = self.get_ranges(boundaries)
+        binary = self.__get_binary(classified_data, keep_nan)
+        self.binary = self.__format_binary(binary, data_events, days_before_defect)
+        self.ranges = self.__get_ranges(boundaries)
 
     def __get_boundaries_by_stat(self, stats: pd.DataFrame):
         """
@@ -204,7 +204,7 @@ class arl_binary_matrix:
         """
         df = pd.concat([data], axis='columns', keys=['value'])
         df.columns = df.columns.swaplevel(0, 1)
-        if boundaries.index.name == self.obj_column:
+        if boundaries.index.name == self.__obj_column:
             return df.join(boundaries)
         else:
             df = pd.concat([df], keys=['0'], names=['all'])
@@ -312,5 +312,5 @@ if __name__ == '__main__':
         df_saz.rename(columns={column: unidecode.unidecode(column).replace('\'', '')}, inplace=True)
     df_saz = df_saz.set_index(['Nomer elektrolizera','Data'])
 
-    bin_hist = arl_binary_matrix(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '', BinarizationType.QUARTILES)
+    bin_hist = arl_binary_matrix(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '', BinarizationType.QUARTILES,ind_type=False)
     # bin_hist.ranges.to_csv('D:\\SAZ_ranges_c.csv')
