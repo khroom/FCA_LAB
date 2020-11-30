@@ -3,7 +3,8 @@ import pandas as pd
 import math
 import datetime
 from enum import Enum
-# import joblib
+import joblib
+
 
 class BinarizationType(Enum):
     STDDEV = 0
@@ -12,28 +13,28 @@ class BinarizationType(Enum):
 
 
 class arl_binary_matrix:
-    def __init__(self, df: pd.DataFrame, defect, obj_column: str, parse_dates: str, bin_type: BinarizationType, ind_type: bool = True, keep_nan=True, days_before_defect=1):
+    def create_model(self, df: pd.DataFrame, obj_column: str, parse_date: str, bin_type: BinarizationType, defect = None, ind_type: bool = True, days_before_defect = 1):
         """
-        Разбивает исходные значения параметров на группы в соответствии с выбранным методом.
-        Строит бинарную матрицу (self.binary) по вхождению значений параметров в группы.
-        Предоставляет интервалы значений для групп (self.ranges).
-        :param df: Фрейм исходных данных. Предполагается, что фрейм имеет сложный индекс, содержащий номер электролизера
-         и дату измерения.
-                для электролизеров, квартили, пересечения гистограмм выборок "чистых" и "с нарушениями")
-        :param defect: Наименование целевого параметра или список целевых параметров
+        Разбивает исходные значения параметров на диапазоны в соответствии с выбранным методом.
+        Полученные диапазоны(модель) заносятся в атрибут класса boundaries
+        :param df: Фрейм исходных данных
+        :param defect: Наименование целевого параметра или список целевых параметров, необходим только для бинаризации по гистограммам
         :param obj_column: Столбец с номером электролизера
-        :param parse_dates: Столбец с датой
-        :param bin_type: Тип бинаризации (стандартное отклонение параметров, индивидуальное стандартное отклонение
-        :param ind_type: Бинаризовать индивидуально для каждого электролизра или нет
-        :param keep_nan: Будет ли бинарная матрица содержать стобцы для NaN значений параметров
+        :param parse_date: Столбец с датой
+        :param bin_type: Тип бинаризации (стандартный разброс, квартили, гистограммы)
+        :param ind_type: Тип бинаризации (индивидуально для каждого электролизера или общая)
         :param days_before_defect: Столбец бинарной матрицы для дня до конуса (days_before_defect=1 - один день до конуса)
         """
         self.__obj_column = obj_column
         self.bin_type = bin_type
-        if not isinstance(defect, list):
-            defect = [defect]
-        data_events = df[defect]
-        data_params = df.drop(defect, axis=1)
+        self.ind_type = ind_type
+        #проверка, нужный ли индекс у df
+        if [obj_column, parse_date] == df.index.names:
+            data_params = df
+        else:
+            data_params = df.reset_index()
+            if (obj_column in data_params.columns) & (parse_date in data_params.columns):
+                data_params = data_params.set_index([obj_column, parse_date])
 
         if bin_type == BinarizationType.STDDEV:
             if ind_type:
@@ -41,9 +42,7 @@ class arl_binary_matrix:
             else:
                 stats = data_params.agg([np.min, np.mean, np.std, np.max])
                 stats = pd.concat([stats], keys=['0'], names=['all']).unstack()
-            boundaries = self.__get_boundaries_by_stat(stats)
-            full_df = self.__concat_data_boundaries(data_params, boundaries)
-            classified_data = self.__classify_by_std(full_df)
+            self.boundaries = self.__get_boundaries_by_stat(stats)
 
         if bin_type == BinarizationType.QUARTILES:
             if ind_type:
@@ -54,24 +53,93 @@ class arl_binary_matrix:
             else:
                 stats = data_params.describe()
                 stats = pd.concat([stats], keys=['0'], names=['all']).unstack()
-            boundaries = self.__get_boundaries_by_quartiles(stats)
-            full_df = self.__concat_data_boundaries(data_params, boundaries)
-            classified_data = self.__classify_by_quartiles(full_df)
+            self.boundaries = self.__get_boundaries_by_quartiles(stats)
 
         if bin_type == BinarizationType.HISTOGRAMS:
+            if not isinstance(defect, list):
+                defect = [defect]
+            data_events = df[defect]
+            data_params = df.drop(defect, axis=1)
             if ind_type:
-                boundaries = pd.DataFrame()
+                self.boundaries = pd.DataFrame()
                 for group, data in data_params.groupby(obj_column):
-                    boundaries = boundaries.append(pd.concat([self.__get_boundaries_by_hist(data, data_events.loc[data.index], day_before=days_before_defect)], keys=[group], names=[obj_column]))
-                boundaries.index = boundaries.index.droplevel(1)
+                    self.boundaries = self.boundaries.append(pd.concat([self.__get_boundaries_by_hist(data, data_events.loc[data.index], day_before=days_before_defect)], keys=[group], names=[obj_column]))
+                self.boundaries.index = self.boundaries.index.droplevel(1)
             else:
-                boundaries = self.__get_boundaries_by_hist(data_params, data_events, day_before=days_before_defect)
-            full_df = self.__concat_data_boundaries(data_params, boundaries)
+                self.boundaries = self.__get_boundaries_by_hist(data_params, data_events, day_before=days_before_defect)
+        self.binary = None
+
+    def load_model(self, file: str):
+        """
+        Загрузка модели из файла в атрибуты класса
+        :param file: имя файла
+        :return:
+        """
+        if '.' in file:
+            model = joblib.load(file)
+        else:
+            model = joblib.load(file + ".joblib")
+        self.boundaries = model.boundaries
+        self.bin_type = model.bin_type
+        self.ind_type = model.ind_type
+        self.binary = None
+
+    def save_model(self, file: str):
+        """
+        Выгрузка модели из класса в файл
+        :param file: имя файла
+        :return:
+        """
+        if self.boundaries is not None:
+            model = self
+            model.binary = None
+            if '.' in file:
+                joblib.dump(self, file)
+            else:
+                joblib.dump(self, file + ".joblib")
+        else:
+            raise Exception("No binary model")
+
+    def transform(self, df: pd.DataFrame, defect, obj_column: str, parse_date: str, keep_nan=True, days_before_defect=1):
+        """
+        Расчет бинарной матрицы по модели
+        :param df: фрейм параметров
+        :param defect: Целевой параметр
+        :param obj_column: Столбец с номером электролизера
+        :param parse_date: Столбец с датой
+        :param keep_nan: Будет ли бинарная матрица содержать стобцы для NaN значений параметров
+        :param days_before_defect:
+        :return: бинарная матрица
+        """
+        if self.boundaries is None:
+            raise Exception("No binary model")
+        # проверка, нужный ли индекс у df
+        if [obj_column, parse_date] == df.index.names:
+            data_params = df
+        else:
+            data_params = df.reset_index()
+            if (obj_column in data_params.columns) & (parse_date in data_params.columns):
+                data_params = data_params.set_index([obj_column, parse_date])
+        if not isinstance(defect, list):
+            defect = [defect]
+        data_events = df[defect]
+        data_params = df.drop(defect, axis=1)
+
+        if self.bin_type == BinarizationType.STDDEV:
+            full_df = self.__concat_data_boundaries(data_params, self.boundaries)
+            classified_data = self.__classify_by_std(full_df)
+
+        if self.bin_type == BinarizationType.QUARTILES:
+            full_df = self.__concat_data_boundaries(data_params, self.boundaries)
+            classified_data = self.__classify_by_quartiles(full_df)
+
+        if self.bin_type == BinarizationType.HISTOGRAMS:
+            full_df = self.__concat_data_boundaries(data_params, self.boundaries)
             classified_data = self.__classify_by_hist(full_df)
 
         binary = self.__get_binary(classified_data, keep_nan)
         self.binary = self.__format_binary(binary, data_events, days_before_defect)
-        self.ranges = self.__get_ranges(boundaries)
+        return self.binary
 
     def __get_boundaries_by_stat(self, stats: pd.DataFrame):
         """
@@ -311,6 +379,5 @@ if __name__ == '__main__':
     for column in df_saz.columns:
         df_saz.rename(columns={column: unidecode.unidecode(column).replace('\'', '')}, inplace=True)
     df_saz = df_saz.set_index(['Nomer elektrolizera','Data'])
-
-    bin_hist = arl_binary_matrix(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '', BinarizationType.QUARTILES,ind_type=False)
-    # bin_hist.ranges.to_csv('D:\\SAZ_ranges_c.csv')
+    bin_hist = arl_binary_matrix()
+    bin_hist.create_model(df_saz, 'Nomer elektrolizera', '', BinarizationType.QUARTILES, 'Konus (sht)', ind_type=False)
