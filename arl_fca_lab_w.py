@@ -10,8 +10,7 @@ import arl_binarization
 
 
 class arl_fca_lab:
-    def __init__(self, bin_type: arl_binarization.BinarizationType = arl_binarization.BinarizationType.HISTOGRAMS,
-                 ind_type: bool = True, keep_nan=True, days_before_defect=1):
+    def __init__(self, bin_type: arl_binarization.BinarizationType = arl_binarization.BinarizationType.HISTOGRAMS, ind_type: bool = True, keep_nan=True, days_before_defect=1):
         """
         Конструктор класса. Инициализирует основные свойства.
         :param bin_type:
@@ -24,15 +23,13 @@ class arl_fca_lab:
         self.ind_type = ind_type
         self.keep_nan=keep_nan
         self.days_before_defect = days_before_defect
-        self.lat = None
+        self.lat= None
         self.concepts_df = None
-        self.confidence_df = {}
         self.defect = []
-        # поставить условие на ind_type
         self.objs = []
-        self.bin_matrix = arl_binarization.ArlBinaryMatrix()
 
-    def fit_model(self, df: pd.DataFrame,  defect: str, obj_column: str, parse_date: str):
+
+    def fit_model(self, df: pd.DataFrame,  defect: list, obj_column: str, parse_date: str):
         """
         :param df:
         :param defect:
@@ -41,73 +38,52 @@ class arl_fca_lab:
         :return:
         """
         self.defect = defect
-        self.objs = list(df.index.get_level_values(0).unique())
-
-        # self.objs = [1.0, 2.0]
+        self.objs = list(df[obj_column].unique())
 
         # Определить параметры функции !!!!!!
-        self.bin_matrix.create_model(df, obj_column, parse_date, self.bin_type, defect, self.ind_type,
-                                     self.days_before_defect)
-        print('Модель создана')
-        self.bin_matrix = self.bin_matrix.transform(df, self.defect, obj_column, parse_date, self.keep_nan,
-                                                    self.days_before_defect)
-        print('Данные бинаризованы')
+        arl_binary_matrix = arl_binarization.arl_binary_matrix()
+
+        # Пересмотреть объявление
+
         """
         Подготовка контекста для расчета решетки - pdf. Из исходного датасета убираем описательные столбцы,
         которые не содержат числовых параметров и относятся к описанию объектов исследования. Оставляем только
         строки у которых в столбце целевого параметра стоит 1.
         """
-        for obj in self.objs:
-            # Подумать как быть со служебными параметрами если они часть мультииндекса
-            # И сделать для нескольких дефектов. Проверить как будет работать с [obj_column, parse_date]
-            start_time = time.time()
-            pdf = self.bin_matrix[(self.bin_matrix['1_day_before'] == 1) & (self.bin_matrix[obj_column] == obj)].drop(
-                [obj_column, parse_date],
-                axis='columns')
-            # Инициализация решетки по урезанному контексту
-            lat = fca_lattice(pdf)
-            print("Объект ", obj, "\nКол-во нарушений:", len(pdf))
-            lat.in_close(0, 0, 0)
-            print(":\nгенерация концептов --- %s seconds ---" % (time.time() - start_time))
+        # Подумать как быть со служебными параметрами если они часть мультииндекса
+        # И сделать для нескольких дефектов. Проверить как будет работать с [obj_column, parse_date]
+        pdf = arl_binary_matrix[arl_binary_matrix[self.defect[0]] == 1].drop([obj_column, parse_date], axis='columns')
+        # Инициализация решетки по урезанному контексту
+        self.lat = fca_lattice(pdf)
+        """ 
+        Датафрейм оценок концептов. 
+        Можно было бы совместить с self.lat.concepts, но это список и он во вложеном объекте.
+        Важно формировать после расчета концептов.
+        """
+        self.concepts_df = pd.DataFrame(index=range(len(self.lat.concepts)),
+                                        columns=['param_support', 'support', 'confidence', 'lift', 'cardinality', 'intent'])
+        self.rules_evaluation(arl_binary_matrix)
 
-            # print("Кол-во концептов:", len(lat.concepts))
 
-            """ 
-            Датафрейм оценок концептов. 
-            Можно было бы совместить с self.lat.concepts, но это список и он во вложеном объекте.
-            Важно формировать после расчета концептов.
-            """
-            # self.concepts_df = pd.DataFrame(index=range(len(self.lat.concepts)),
-            #                                 columns=['param_support', 'support', 'confidence', 'lift', 'cardinality', 'intent'])
-            start_time = time.time()
-            self.confidence_df[obj] = self.rules_evaluation(lat, self.bin_matrix)
-            print("оценка концептов --- %s seconds ---" % (time.time() - start_time))
-
-    def rules_evaluation(self, lat: fca_lattice, df: pd.DataFrame):
+    def rules_evaluation(self, df):
         """
         Рассчет коэфициента уверенности для концептов относительно исходного контекста.
-        :param lat:
-        :param df:
         :return:
         """
-        confidence_df = pd.DataFrame(index=range(len(lat.concepts)), columns=['B', 'confidence'])
-
-        df_derivation = pd.Series(index=lat.context.columns, dtype='object')
+        df_derivation = pd.Series(index=self.lat.context.columns, dtype='object')
         for col in df_derivation.index:
             df_derivation.loc[col] = set(df.loc[:, col][df.loc[:, col] == 1].index)
 
-        for i in range(len(lat.concepts)):
-            if (lat.concepts[i]['B'].difference({'1_day_before'}) != set()) and (lat.concepts[i]['A'] != set()):
+        for i in range(len(self.lat.concepts)):
+            if (self.lat.concepts[i]['B'].difference({self.defect[0]}) != set()) and (self.lat.concepts[i]['A'] != set()):
                 # Мощность содержания для левой части правила (без целевого параметра). Обязательно
                 left_extent = len(
-                    set.intersection(*[df_derivation[j] for j in lat.concepts[i]['B'].difference({self.defect[0]})]))
+                    set.intersection(*[df_derivation[j] for j in self.lat.concepts[i]['B'].difference({self.defect[0]})]))
                 # Можность содержания для всего правила (с целевым параметром). Обязательно
-                rule_extent = len(lat.concepts[i]['A'])
+                rule_extent = len(self.lat.concepts[i]['A'])
                 # Достоверность правила, как часто срабатывает. Обязательно
-                confidence_df.loc[i, 'confidence'] = rule_extent / left_extent
-                confidence_df.loc[i, 'B'] = lat.concepts[i]['B']
-        confidence_df = confidence_df.sort_values(by='confidence', axis=0, ascending=False)
-        return confidence_df
+                self.concepts_df.loc[i, 'confidence'] = rule_extent / left_extent
+
 
     def concepts_evaluation(self, df, pdf):
         """
@@ -141,6 +117,7 @@ class arl_fca_lab:
                 # self.concepts_df.loc[i, 'lift'] = self.concepts_df.loc[i, 'confidence'] / param_fraction
                 # Количество нарушений покрытых правилом. Опционально
                 # self.concepts_df.loc[i, 'extent'] = len(self.lat.concepts[i]['A'])
+
 
     def rules_describe(self, weight_df: pd.DataFrame):
         """
@@ -199,50 +176,35 @@ def get_row(df: pd.DataFrame, num: int = 0):
     return row_set
 
 if __name__ == '__main__':
+    start_time = time.time()
+
     # df = pd.read_csv('.\\saz_binary\\CAZ_binary_stdev_individual_true.csv', index_col=0, sep=',')
     # param = 'Konus (da/net)'
 
-    # df = pd.read_csv('.\\saz_binary\\Saz_histogramms_binary.csv', index_col=0, sep=',')
-    df = pd.read_csv('.\\resultall.csv', parse_dates=['Дата'])
-    df = df[df['Дата'] < '01.01.2020']
+    df = pd.read_csv('.\\saz_binary\\Saz_histogramms_binary.csv', index_col=0, sep=',')
+    range_df = pd.read_csv('.\\saz_binary\\Saz_histogramm_ranges.csv', index_col=0, sep=',')
+    df = df.drop(columns='Konus (da/net)')
+    param = 'DAY_BEFORE_KONUS'
 
-    df.drop(['Индекс', 'АЭ: кол-во', 'АЭ: длит.', 'АЭ: напр. ср.', 'Пена: снято с эл-ра', 'Срок службы',
-                  'Кол-во поддер. анодов', 'АЭ: кол-во локальных', 'Отставание (шт)', 'Другое нарушение (шт)',
-                  'Нарушение', 'Анод', 'Выливка: отношение скорости', 'Выход по току: Л/О', 'Подина: напр.',
-                  'Кол-во доз АПГ в руч.реж.', 'Конус (да/нет)'], axis='columns', inplace=True)
-    import unidecode
+    binary = df[df['VANNA'] == 0]
+    arl = arl_fca_lab(binary, ['VANNA', 'RDATE'], param)
+    print("Загрузка --- %s seconds ---" % (time.time() - start_time))
+    start_time = time.time()
+    arl.lat.in_close(0, 0, 0)
+    print("Генерация концептов --- %s seconds ---" % (time.time() - start_time))
+    # arl.lat.concepts.clear()
+    # for i in range(1, 100):
+    #     arl.lat.read_concepts(i,False)
+    arl.concepts_evaluation()
 
-    # замена кириллицы на латинницу
-    for column in df.columns:
-        df.rename(columns={column: unidecode.unidecode(column).replace('\'', '')}, inplace=True)
-    df = df.set_index(['Nomer elektrolizera', 'Data'])
+    # arl.rules_scatter(concepts_df[concepts_df.lift > 1])
+    print(len(arl.lat.concepts))
+    print(len(binary[binary[param] == 1]))
 
-    model = arl_fca_lab()
-    model.fit_model(df,'Konus (sht)','Nomer elektrolizera', 'Data')
-
-
-    # df = df.drop(columns='Konus (da/net)')
-    # param = 'DAY_BEFORE_KONUS'
-
-    # binary = df[df['VANNA'] == 0]
-    # arl = arl_fca_lab(binary, ['VANNA', 'RDATE'], param)
-    # print("Загрузка --- %s seconds ---" % (time.time() - start_time))
-    # start_time = time.time()
-    # arl.lat.in_close(0, 0, 0)
-    # print("Генерация концептов --- %s seconds ---" % (time.time() - start_time))
-    # # arl.lat.concepts.clear()
-    # # for i in range(1, 100):
-    # #     arl.lat.read_concepts(i,False)
-    # arl.concepts_evaluation()
-    #
-    # # arl.rules_scatter(concepts_df[concepts_df.lift > 1])
-    # print(len(arl.lat.concepts))
-    # print(len(binary[binary[param] == 1]))
-    #
-    # count_df = pd.DataFrame(index = binary.index, columns=['Prediction', 'Fact'])
-    # for i in binary.index:
-    #     count_df.loc[i, 'Prediction'] = arl.get_prediction(get_row(binary, i))
-    #     count_df.loc[i, 'Fact'] = binary.iloc[i, -1]
+    count_df = pd.DataFrame(index = binary.index, columns=['Prediction', 'Fact'])
+    for i in binary.index:
+        count_df.loc[i, 'Prediction'] = arl.get_prediction(get_row(binary, i))
+        count_df.loc[i, 'Fact'] = binary.iloc[i, -1]
 
 
     """

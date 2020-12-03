@@ -12,7 +12,7 @@ class BinarizationType(Enum):
     HISTOGRAMS = 2
 
 
-class arl_binary_matrix:
+class ArlBinaryMatrix:
     def create_model(self, df: pd.DataFrame, obj_column: str, parse_date: str, bin_type: BinarizationType, defect = None, ind_type: bool = True, days_before_defect = 1):
         """
         Разбивает исходные значения параметров на диапазоны в соответствии с выбранным методом.

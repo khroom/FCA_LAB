@@ -81,6 +81,7 @@ class fca_lattice:
                         new_concept['B'] = new_concept['B'].union(self.concepts[r]['B'])
                         new_concept['B'].add(self.context.columns[j])
                         self.concepts.append(new_concept)
+                        print('\r', len(self.concepts), end='')
                         self.in_close(j + 1, len(self.concepts) - 1, threshold)
 
     def __my_close__(self, column: int, concept_A: set, interval_number: int):
