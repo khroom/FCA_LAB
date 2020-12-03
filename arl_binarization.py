@@ -35,7 +35,10 @@ class ArlBinaryMatrix:
             data_params = df.reset_index()
             if (obj_column in data_params.columns) & (parse_date in data_params.columns):
                 data_params = data_params.set_index([obj_column, parse_date])
-
+        if not isinstance(defect, list):
+            defect = [defect]
+        data_events = df[defect]
+        data_params = df.drop(defect, axis=1)
         if bin_type == BinarizationType.STDDEV:
             if ind_type:
                 stats = data_params.groupby(obj_column).agg([np.min, np.mean, np.std, np.max])
@@ -56,10 +59,6 @@ class ArlBinaryMatrix:
             self.boundaries = self.__get_boundaries_by_quartiles(stats)
 
         if bin_type == BinarizationType.HISTOGRAMS:
-            if not isinstance(defect, list):
-                defect = [defect]
-            data_events = df[defect]
-            data_params = df.drop(defect, axis=1)
             if ind_type:
                 self.boundaries = pd.DataFrame()
                 for group, data in data_params.groupby(obj_column):
@@ -124,17 +123,15 @@ class ArlBinaryMatrix:
             defect = [defect]
         data_events = df[defect]
         data_params = df.drop(defect, axis=1)
+        full_df = self.__concat_data_boundaries(data_params, self.boundaries)
 
         if self.bin_type == BinarizationType.STDDEV:
-            full_df = self.__concat_data_boundaries(data_params, self.boundaries)
             classified_data = self.__classify_by_std(full_df)
 
         if self.bin_type == BinarizationType.QUARTILES:
-            full_df = self.__concat_data_boundaries(data_params, self.boundaries)
             classified_data = self.__classify_by_quartiles(full_df)
 
         if self.bin_type == BinarizationType.HISTOGRAMS:
-            full_df = self.__concat_data_boundaries(data_params, self.boundaries)
             classified_data = self.__classify_by_hist(full_df)
 
         binary = self.__get_binary(classified_data, keep_nan)

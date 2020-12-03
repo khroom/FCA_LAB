@@ -41,9 +41,9 @@ class arl_fca_lab:
         :return:
         """
         self.defect = defect
-        self.objs = list(df.index.get_level_values(0).unique())
+        #self.objs = list(df.index.get_level_values(0).unique())
 
-        # self.objs = [1.0, 2.0]
+        self.objs = [1.0]
 
         # Определить параметры функции !!!!!!
         self.bin_matrix.create_model(df, obj_column, parse_date, self.bin_type, defect, self.ind_type,
@@ -217,7 +217,7 @@ if __name__ == '__main__':
         df.rename(columns={column: unidecode.unidecode(column).replace('\'', '')}, inplace=True)
     df = df.set_index(['Nomer elektrolizera', 'Data'])
 
-    model = arl_fca_lab()
+    model = arl_fca_lab(bin_type=arl_binarization.BinarizationType.STDDEV)
     model.fit_model(df,'Konus (sht)','Nomer elektrolizera', 'Data')
 
 
