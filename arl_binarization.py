@@ -388,7 +388,5 @@ if __name__ == '__main__':
     df_saz = arl_data.Data.fix_initial_frame(df_saz)
 
     bin_hist = ArlBinaryMatrix()
-    bin_hist.create_model(df_saz, 'Nomer elektrolizera', '', BinarizationType.HISTOGRAMS, 'Konus (sht)')
-    bin_hist.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '', anomalies_only = True)
-
-
+    bin_hist.create_model(df_saz, 'Nomer elektrolizera', '', BinarizationType.QUARTILES, 'Konus (sht)')
+    bin_hist.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '')
