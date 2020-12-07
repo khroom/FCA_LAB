@@ -1,3 +1,7 @@
+from collections import Set
+
+import numpy
+import unidecode
 import numpy as np
 import pandas as pd
 import time
@@ -7,7 +11,7 @@ import joblib
 from networkx.drawing.nx_agraph import graphviz_layout
 from fca_lab import fca_lattice
 import arl_binarization
-
+import pickle
 
 class arl_fca_lab:
     def __init__(self, bin_type: arl_binarization.BinarizationType = arl_binarization.BinarizationType.HISTOGRAMS,
@@ -41,13 +45,11 @@ class arl_fca_lab:
         :return:
         """
         self.defect = defect
-        #self.objs = list(df.index.get_level_values(0).unique())
+        self.objs = list(df.index.get_level_values(0).unique())
+        # self.objs = [5.0]
 
-        self.objs = [1.0]
+        self.bin_matrix.create_model(df, obj_column, parse_date, self.bin_type, defect, self.ind_type)
 
-        # Определить параметры функции !!!!!!
-        self.bin_matrix.create_model(df, obj_column, parse_date, self.bin_type, defect, self.ind_type,
-                                     self.days_before_defect)
         print('Модель создана')
         self.bin_matrix = self.bin_matrix.transform(df, self.defect, obj_column, parse_date, self.keep_nan,
                                                     self.days_before_defect)
@@ -79,19 +81,20 @@ class arl_fca_lab:
             """
             # self.concepts_df = pd.DataFrame(index=range(len(self.lat.concepts)),
             #                                 columns=['param_support', 'support', 'confidence', 'lift', 'cardinality', 'intent'])
+
             start_time = time.time()
-            self.confidence_df[obj] = self.rules_evaluation(lat, self.bin_matrix)
+            self.confidence_df[obj] = self.rules_evaluation(lat, self.bin_matrix, pdf)
             print("оценка концептов --- %s seconds ---" % (time.time() - start_time))
 
-    def rules_evaluation(self, lat: fca_lattice, df: pd.DataFrame):
+    def rules_evaluation(self, lat: fca_lattice, df: pd.DataFrame, pdf: pd.DataFrame):
         """
         Рассчет коэфициента уверенности для концептов относительно исходного контекста.
         :param lat:
         :param df:
         :return:
         """
-        confidence_df = pd.DataFrame(index=range(len(lat.concepts)), columns=['B', 'confidence'])
-
+        confidence_df = pd.DataFrame(index=range(len(lat.concepts)), columns=['B', 'confidence', 'd_support'])
+        pdf_len = len(pdf)
         df_derivation = pd.Series(index=lat.context.columns, dtype='object')
         for col in df_derivation.index:
             df_derivation.loc[col] = set(df.loc[:, col][df.loc[:, col] == 1].index)
@@ -100,50 +103,21 @@ class arl_fca_lab:
             if (lat.concepts[i]['B'].difference({'1_day_before'}) != set()) and (lat.concepts[i]['A'] != set()):
                 # Мощность содержания для левой части правила (без целевого параметра). Обязательно
                 left_extent = len(
-                    set.intersection(*[df_derivation[j] for j in lat.concepts[i]['B'].difference({self.defect[0]})]))
+                    set.intersection(*[df_derivation[j] for j in lat.concepts[i]['B'].difference({'1_day_before'})]))
                 # Можность содержания для всего правила (с целевым параметром). Обязательно
                 rule_extent = len(lat.concepts[i]['A'])
                 # Достоверность правила, как часто срабатывает. Обязательно
                 confidence_df.loc[i, 'confidence'] = rule_extent / left_extent
+                confidence_df.loc[i, 'd_support'] = rule_extent / pdf_len
                 confidence_df.loc[i, 'B'] = lat.concepts[i]['B']
+
         confidence_df = confidence_df.sort_values(by='confidence', axis=0, ascending=False)
         return confidence_df
 
-    def concepts_evaluation(self, df, pdf):
-        """
-        Рассчет параметров для концептов относительно исходного контекста.
-        :return:
-        """
-        df_derivation = pd.Series(index=self.lat.context.columns, dtype='object')
-        for col in df_derivation.index:
-            df_derivation.loc[col] = set(df.loc[:, col][df.loc[:, col] == 1].index)
-        # param_fraction = len(df[df[self.defect[0]] == 1]) / len(df)
-
-        # df_len = len(df)
-        # pdf_len = len(pdf)
-
-        for i in range(len(self.lat.concepts)):
-            if (self.lat.concepts[i]['B'].difference({self.defect[0]}) != set()) and (self.lat.concepts[i]['A'] != set()):
-                # Мощность содержания для левой части правила (без целевого параметра). Обязательно
-                self.lat.concepts[i]['left_extent'] = len(
-                    set.intersection(*[df_derivation[j] for j in self.lat.concepts[i]['B'].difference({self.defect[0]})]))
-                # Можность содержания для всего правила (с целевым параметром). Обязательно
-                self.lat.concepts[i]['rule_extent'] = len(self.lat.concepts[i]['A'])
-                # Поддержка по нарушениям. Опционально
-                # self.concepts_df.loc[i, 'param_support'] = self.lat.concepts[i]['rule_extent'] / pdf_len
-                # Поддержка правила. Опционально
-                # self.concepts_df.loc[i, 'support'] = self.lat.concepts[i]['rule_extent'] / df_len
-                # Мощность содержания левой части правила. Опционально
-                # self.concepts_df.loc[i, 'cardinality'] = len(self.lat.concepts[i]['B']) - 1
-                # Достоверность правила, как часто срабатывает. Обязательно
-                self.concepts_df.loc[i, 'confidence'] = self.lat.concepts[i]['rule_extent'] / self.lat.concepts[i]['left_extent']
-                # Поддержка, вклад левой части в вероятность правой части. Опционально
-                # self.concepts_df.loc[i, 'lift'] = self.concepts_df.loc[i, 'confidence'] / param_fraction
-                # Количество нарушений покрытых правилом. Опционально
-                # self.concepts_df.loc[i, 'extent'] = len(self.lat.concepts[i]['A'])
 
     def rules_describe(self, weight_df: pd.DataFrame):
         """
+        ToDo: Возможно пригодиться
         Описание правил формальным образом для генерации отчета по проекту. Вариант.
         :param weight_df: Датафрейм оценок в разрезе ванн
         :return:
@@ -159,8 +133,9 @@ class arl_fca_lab:
             print('Количество ванн:', df[i].count())
             print('---')
 
-    def rules_scatter(self, how: ['show', 'save'] = 'show', alpha=0.8, s=50):
+    def rules_scatter(self, obj_num, how: ['show', 'save'] = 'show', alpha=0.8, s=50):
         """
+        ToDo: ДОбавить объект, убрать self.concepts_df
         Диаграмма рассеяния для весомых правил
         :param how: показывать или сохранить диаграмму в файл
         :param weight_df: Датафрейм оценок в разрезе ванн
@@ -170,25 +145,29 @@ class arl_fca_lab:
         """
         fig, ax = plt.subplots()
         # fig = plt.figure(figsize=(9, 9))
-        weight_df = self.concepts_df.sort_values(by='cardinality', axis=0)
-        scatter = ax.scatter(x=weight_df['confidence'], y=weight_df['extent'], c=weight_df['cardinality'],
-                             cmap='viridis', alpha=alpha, s=s, label=weight_df['cardinality'])
-        legend1 = ax.legend(*scatter.legend_elements(), loc="upper right", title="cardinality")
+        weight_df = self.confidence_df[obj_num].dropna()
+        scatter = ax.scatter(x=weight_df['confidence'], y=weight_df['d_support'],
+                             c=[len(weight_df.loc[i, 'B']) for i in weight_df.index],
+                             cmap='viridis', alpha=alpha, s=s, label=weight_df['confidence'])
+        legend1 = ax.legend(*scatter.legend_elements(), loc="upper right", title="Мощность правила")
         ax.add_artist(legend1)
-        plt.xlabel("Confidence")
-        plt.ylabel("Extent")
+        plt.xlabel("Уверенность")
+        plt.ylabel("Поддержка")
         if how == 'show':
             plt.show()
         else:
             plt.savefig('scatter.png')
 
-    def get_prediction(self, row_set: set):
-        weight_df = self.concepts_df.sort_values(by='confidence', axis=0, ascending=False)
-        for i in weight_df.index:
-            if self.lat.concepts[i]['B'].difference(row_set) == {self.param}:
-                return weight_df.loc[i,'confidence']
-                break
-        return 0
+    def get_prediction(self, row_set: set, obj_num, support_threshold=0):
+        # weight_df = self.concepts_df.sort_values(by='confidence', axis=0, ascending=False)
+        for row_index in self.confidence_df[obj_num].index:
+            if self.confidence_df[obj_num].loc[row_index, 'd_support'] >=support_threshold:
+                rule_set = self.confidence_df[obj_num].loc[row_index, "B"]
+                if isinstance(rule_set, Set):
+                    if rule_set.difference(row_set) == {'1_day_before'}:
+                        return row_index
+        return None
+
 
 def get_row(df: pd.DataFrame, num: int = 0):
     row = df.iloc[num,2:-2]
@@ -198,62 +177,117 @@ def get_row(df: pd.DataFrame, num: int = 0):
             row_set.add(k)
     return row_set
 
+
+def dump_model(model, file_name):
+    picklefile = open(file_name, 'wb')
+    pickle.dump(model, picklefile)
+    picklefile.close()
+
+
+def load_model(file_name):
+    picklefile = open(file_name, 'rb')
+    model = pickle.load(picklefile)
+    picklefile.close()
+    return model
+
+
 if __name__ == '__main__':
     # df = pd.read_csv('.\\saz_binary\\CAZ_binary_stdev_individual_true.csv', index_col=0, sep=',')
     # param = 'Konus (da/net)'
 
     # df = pd.read_csv('.\\saz_binary\\Saz_histogramms_binary.csv', index_col=0, sep=',')
+    print('Загрузка исходных данных')
     df = pd.read_csv('.\\resultall.csv', parse_dates=['Дата'])
-    df = df[df['Дата'] < '01.01.2020']
 
-    df.drop(['Индекс', 'АЭ: кол-во', 'АЭ: длит.', 'АЭ: напр. ср.', 'Пена: снято с эл-ра', 'Срок службы',
+    test_df = df[(df['Дата'] >= '2020.02.01')&(df['Дата'] < '2020.05.01')]
+    # test_df = df[df['Дата'] >= '01.01.2020']
+    train_df = df[(df['Дата'] >= '2019.01.01')&(df['Дата'] < '2020.01.01')]
+    print('Выполнено')
+    print('Переход на латиницу')
+    test_df.drop(['Индекс', 'АЭ: кол-во', 'АЭ: длит.', 'АЭ: напр. ср.', 'Пена: снято с эл-ра', 'Срок службы',
                   'Кол-во поддер. анодов', 'АЭ: кол-во локальных', 'Отставание (шт)', 'Другое нарушение (шт)',
                   'Нарушение', 'Анод', 'Выливка: отношение скорости', 'Выход по току: Л/О', 'Подина: напр.',
                   'Кол-во доз АПГ в руч.реж.', 'Конус (да/нет)'], axis='columns', inplace=True)
-    import unidecode
 
     # замена кириллицы на латинницу
-    for column in df.columns:
-        df.rename(columns={column: unidecode.unidecode(column).replace('\'', '')}, inplace=True)
-    df = df.set_index(['Nomer elektrolizera', 'Data'])
+    for column in test_df.columns:
+        test_df.rename(columns={column: unidecode.unidecode(column).replace('\'', '')}, inplace=True)
+    test_df = test_df.set_index(['Nomer elektrolizera', 'Data'])
 
-    model = arl_fca_lab(bin_type=arl_binarization.BinarizationType.STDDEV)
-    model.fit_model(df,'Konus (sht)','Nomer elektrolizera', 'Data')
+    train_df.drop(['Индекс', 'АЭ: кол-во', 'АЭ: длит.', 'АЭ: напр. ср.', 'Пена: снято с эл-ра', 'Срок службы',
+                  'Кол-во поддер. анодов', 'АЭ: кол-во локальных', 'Отставание (шт)', 'Другое нарушение (шт)',
+                  'Нарушение', 'Анод', 'Выливка: отношение скорости', 'Выход по току: Л/О', 'Подина: напр.',
+                  'Кол-во доз АПГ в руч.реж.', 'Конус (да/нет)'], axis='columns', inplace=True)
 
+    # замена кириллицы на латинницу
+    for column in train_df.columns:
+        train_df.rename(columns={column: unidecode.unidecode(column).replace('\'', '')}, inplace=True)
+    train_df = train_df.set_index(['Nomer elektrolizera', 'Data'])
+    print('Выполнено')
+    print('Расчет модели')
 
-    # df = df.drop(columns='Konus (da/net)')
-    # param = 'DAY_BEFORE_KONUS'
+    # model = arl_fca_lab(bin_type=arl_binarization.BinarizationType.QUARTILES)
+    # model.fit_model(train_df,'Konus (sht)','Nomer elektrolizera', 'Data')
 
-    # binary = df[df['VANNA'] == 0]
-    # arl = arl_fca_lab(binary, ['VANNA', 'RDATE'], param)
-    # print("Загрузка --- %s seconds ---" % (time.time() - start_time))
-    # start_time = time.time()
-    # arl.lat.in_close(0, 0, 0)
-    # print("Генерация концептов --- %s seconds ---" % (time.time() - start_time))
-    # # arl.lat.concepts.clear()
-    # # for i in range(1, 100):
-    # #     arl.lat.read_concepts(i,False)
-    # arl.concepts_evaluation()
-    #
-    # # arl.rules_scatter(concepts_df[concepts_df.lift > 1])
-    # print(len(arl.lat.concepts))
-    # print(len(binary[binary[param] == 1]))
-    #
-    # count_df = pd.DataFrame(index = binary.index, columns=['Prediction', 'Fact'])
-    # for i in binary.index:
-    #     count_df.loc[i, 'Prediction'] = arl.get_prediction(get_row(binary, i))
-    #     count_df.loc[i, 'Fact'] = binary.iloc[i, -1]
+    model = load_model('model_QUAR')
+    model.bin_matrix = arl_binarization.ArlBinaryMatrix()
+    model.bin_matrix.create_model(train_df, 'Nomer elektrolizera', 'Data', model.bin_type, model.defect, model.ind_type,
+                                 model.days_before_defect)
+    # model.rules_scatter(7.0, 'save')
+    print('Выполнено')
+    print('Подготовка тестового датасета')
+    test_matrix = model.bin_matrix.transform(test_df, model.defect, 'Nomer elektrolizera', 'Data',
+                                             model.keep_nan, model.days_before_defect)
+    # dump_model(model,'model_QUAR')
 
+    print('Выполнено')
+    print('Расчет оценок')
+    test_results = pd.DataFrame(index=test_matrix.index, columns=['Object', 'Prediction', 'Fact', 'Rule'])
 
-    """
-for i in set.difference(arl.lat.concepts[3]['B'], {'DAY_BEFORE_KONUS'}):
-...     print(range_df[range_df.interval == i].index.values[0])
-...     print(range_df[range_df.interval == i]['min'].values[0], ' - ', range_df[range_df.interval == i]['max'].values[0])
-    
-    confidence_df = concepts_df[(concepts_df.lift > 1)&(concepts_df.confidence > 0.6)&(concepts_df.confidence < 0.8)]
-    
-    for i in confidence_df.index:
-...     print(i, ': ', set.difference(arl.lat.concepts[i]['B'], {'DAY_BEFORE_KONUS'}),'--> {\'DAY_BEFORE_KONUS\'}')
-...     for j in arl.lat.concepts[i]['A']:
-...         print('VANNA: ', arl.df.loc[j,'VANNA'], ', DATE: ', arl.df.loc[j,'RDATE'])
-    """
+    for i in test_matrix.index:
+        obj_num = test_matrix.loc[i, 'Nomer elektrolizera']
+        rule_index = model.get_prediction(get_row(test_matrix, i), obj_num)
+        test_results.loc[i, 'Object'] = obj_num
+        test_results.loc[i, 'Fact'] = test_matrix.iloc[i, -1]
+
+        if rule_index == None:
+            test_results.loc[i, 'Prediction'] = 0
+            test_results.loc[i, 'Rule'] = -1
+        else:
+            test_results.loc[i, 'Prediction'] = model.confidence_df[obj_num].loc[rule_index, 'confidence']
+            test_results.loc[i, 'Rule'] = rule_index
+                # model.confidence_df[obj_num].loc[rule_index, 'B']
+        print('Index:', i, ', Object:', test_results.loc[i, 'Object'], ', Predict:', test_results.loc[i, 'Prediction'],
+              ', Fact:',test_results.loc[i, 'Fact'])
+    print('Выполнено')
+    test_results = pd.concat([test_results, test_matrix[['Data', 'Konus (sht)', '1_day_before']]], axis=1)
+    threshold_f1= pd.DataFrame(columns=[ 'Threshold', 'precision', 'recall'])
+    for threshold in numpy.arange(0.01, 0.99, 0.01):
+        threshold_f1.loc[threshold, 'TP'] = len(
+            test_results[(test_results.Fact == 1) &
+                         (test_results.Prediction >= threshold)])+ len(
+            test_results[(test_results['Konus (sht)'] != 0) &
+                         (test_results.Prediction >= threshold)])
+
+        threshold_f1.loc[threshold, 'FP'] = len(
+            test_results[(test_results.Fact == 0) &
+                         (test_results.Prediction >= threshold) &
+                         (test_results['Konus (sht)'] == 0)])
+        threshold_f1.loc[threshold, 'FN'] = len(
+            test_results[(test_results.Fact == 1) & (test_results.Prediction < threshold)])
+        threshold_f1.loc[threshold, 'Threshold'] = threshold
+        threshold_f1.loc[threshold, 'recall'] = threshold_f1.loc[threshold, 'TP'] / (
+                    threshold_f1.loc[threshold, 'TP'] + threshold_f1.loc[threshold, 'FN'])
+        threshold_f1.loc[threshold, 'precision'] = threshold_f1.loc[threshold, 'TP'] / (
+                    threshold_f1.loc[threshold, 'TP'] + threshold_f1.loc[threshold, 'FP'])
+        # threshold_f1.loc[threshold, 'F1'] = 2 / (1/threshold_f1.loc[threshold, 'recall'] +
+        #                                          1/threshold_f1.loc[threshold, 'precision'])
+
+    plt.plot(threshold_f1['Threshold'], threshold_f1['TP'] / len(test_results[(test_results['Konus (sht)'] == 1)|
+                                                                         (test_results['1_day_before'] == 1)]), 'r',
+             threshold_f1['Threshold'], threshold_f1['FP'] / len(test_results[(test_results['Konus (sht)'] == 0)&
+                                                                         (test_results['1_day_before'] == 0)]), 'b',
+             threshold_f1['Threshold'], threshold_f1['FN'] / len(test_results[(test_results['Konus (sht)'] == 1)|
+                                                                         (test_results['1_day_before'] == 1)]), 'g')
+    plt.savefig('quar_02-05_1.png')
+
