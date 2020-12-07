@@ -376,5 +376,5 @@ if __name__ == '__main__':
     for column in df_saz.columns:
         df_saz.rename(columns={column: unidecode.unidecode(column).replace('\'', '')}, inplace=True)
     df_saz = df_saz.set_index(['Nomer elektrolizera','Data'])
-    bin_hist = ArlBinaryMatrix()
+    bin_hist = arl_binary_matrix()
     bin_hist.create_model(df_saz, 'Nomer elektrolizera', '', BinarizationType.QUARTILES, 'Konus (sht)', ind_type=False)
