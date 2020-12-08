@@ -60,13 +60,7 @@ class ArlBinaryMatrix:
             self.boundaries = self.__get_boundaries_by_quartiles(stats)
 
         if bin_type == BinarizationType.HISTOGRAMS:
-            if ind_type:
-                self.boundaries = pd.DataFrame()
-                for group, data in data_params.groupby(obj_column):
-                    self.boundaries = self.boundaries.append(pd.concat([self.__get_boundaries_by_hist(data, data_events.loc[data.index], day_before=days_before_defect)], keys=[group], names=[obj_column]))
-                self.boundaries.index = self.boundaries.index.droplevel(1)
-            else:
-                self.boundaries = self.__get_boundaries_by_hist(data_params, data_events, day_before=days_before_defect)
+            self.boundaries = self.__get_boundaries_by_hist(data_params, data_events, day_before=days_before_defect)
         self.binary = None
 
     def load_model(self, file: str):
@@ -127,17 +121,57 @@ class ArlBinaryMatrix:
         full_df = self.__concat_data_boundaries(data_params, self.boundaries)
 
         if self.bin_type == BinarizationType.STDDEV:
-            classified_data = self.__classify_by_std(full_df, anomalies_only)
+            classified_data = self.__classify_by_std(full_df)
+            binary = self.__get_binary(classified_data)
+            if anomalies_only:
+                normal = []
+                for c in binary.columns:
+                    if c[-2:] == '_1':
+                        normal.append(c)
+                binary = binary.drop(normal, axis='columns')
+            if not keep_nan:
+                binary = self.__drop_nan(binary)
 
         if self.bin_type == BinarizationType.QUARTILES:
             classified_data = self.__classify_by_quartiles(full_df)
+            binary = self.__get_binary(classified_data)
+            if anomalies_only:
+                normal = []
+                for c in binary.columns:
+                    if (c[-2:] == '_1') | (c[-2:] == '_2'):
+                        normal.append(c)
+                binary = binary.drop(normal, axis='columns')
+            if not keep_nan:
+                binary = self.__drop_nan(binary)
 
         if self.bin_type == BinarizationType.HISTOGRAMS:
-            classified_data = self.__classify_by_hist(full_df, anomalies_only)
+            classified_data = self.__classify_by_hist(full_df)
+            binary = self.__get_binary(classified_data)
+            if anomalies_only:
+                normal = set()
+                for p in self.boundaries.columns.get_level_values(0).unique():
+                    for c in self.boundaries[p].columns:
+                        if c[1] == 'clean':
+                            col = p + '_' + str(c[0])
+                            if col in binary.columns:
+                                normal.add(col)
+                        if c[1] == 'defect':
+                            col = p + '_' + str(c[0]+1)
+                            if col in binary.columns:
+                                normal.add(col)
+                binary = binary.drop(list(normal), axis='columns')
+            if not keep_nan:
+                binary = self.__drop_nan(binary)
 
-        binary = self.__get_binary(classified_data, keep_nan)
         self.binary = self.__format_binary(binary, data_events, days_before_defect)
         return self.binary
+
+    def __drop_nan (self, df: pd.DataFrame):
+        nan_cols = []
+        for c in df.columns:
+            if c[-4:] == '_NaN':
+                nan_cols.append(c)
+        return df.drop(nan_cols, axis='columns')
 
     def __get_boundaries_by_stat(self, stats: pd.DataFrame):
         """
@@ -277,7 +311,7 @@ class ArlBinaryMatrix:
             df.index = df.index.droplevel(0)
             return df
 
-    def __classify_by_std(self, df: pd.DataFrame, anomalies_only=False):
+    def __classify_by_std(self, df: pd.DataFrame):
         """
         Классификация значений параметров по стандартному отклонению.
         Три интервала для каждого параметра. Граничные точки центрального интервала включены в центральынй интервал.
@@ -287,8 +321,7 @@ class ArlBinaryMatrix:
         classified = pd.DataFrame(index=df.index)
         for c in df.columns.get_level_values(0).unique():
             classified.loc[df[(c, 'value')] < df[(c, 1)], c] = 0
-            if not anomalies_only:
-                classified.loc[df[(c, 'value')].between(df[(c, 1)], df[(c, 2)]), c] = 1
+            classified.loc[df[(c, 'value')].between(df[(c, 1)], df[(c, 2)]), c] = 1
             classified.loc[df[(c, 'value')] > df[(c, 2)], c] = 2
         return classified
 
@@ -307,7 +340,7 @@ class ArlBinaryMatrix:
             classified.loc[df[(c, 'value')] > df[(c, 3)], c] = 3
         return classified
 
-    def __classify_by_hist(self, df: pd.DataFrame, anomalies_only=False):
+    def __classify_by_hist(self, df: pd.DataFrame):
         """
         Классификация значений параметров по пересечениям гистограмм выборок "чистых" и "с нарушениями".
         Разное количество интевалов для параметров. Классификации подлежат только параметры имеющие два и более интервалов.
@@ -324,40 +357,36 @@ class ArlBinaryMatrix:
                 if len(dfc.columns) > 1:
                     if (i, 'defect') in dfc.columns:
                         classified.loc[dfc[dfc['value'] <= dfc[(i, 'defect')]].index, c] = i
-                    if (not anomalies_only) & ((i, 'clean') in dfc.columns):
+                    if (i, 'clean') in dfc.columns:
                         classified.loc[dfc[dfc['value'] <= dfc[(i, 'clean')]].index, c] = i
                     i += 1
                     while i <= dfc.columns[-1][0]:
                         if (i, 'defect') in dfc.columns:
                             classified.loc[dfc[(dfc['value'] > dfc[(i-1, 'clean')]) & (dfc['value'] <= dfc[(i, 'defect')])].index, c] = i
-                        if (not anomalies_only) & ((i, 'clean') in dfc.columns):
+                        if (i, 'clean') in dfc.columns:
                             classified.loc[dfc[(dfc['value'] > dfc[(i-1, 'defect')]) & (dfc['value'] <= dfc[(i, 'clean')])].index, c] = i
                         i += 1
                     #последние интервалы. Если последняя граница 'clean', значит, последний интервал - 'defect'
                     if (i-1, 'clean') in dfc.columns:
                         classified.loc[dfc[(dfc['value'] > dfc[(i-1, 'clean')])].index, c] = i
-                    if (not anomalies_only) & ((i-1, 'defect') in dfc.columns):
+                    if (i-1, 'defect') in dfc.columns:
                         classified.loc[dfc[(dfc['value'] > dfc[(i-1, 'defect')])].index, c] = i
         return classified
 
-    def __get_binary(self, df: pd.DataFrame, nan_cols=True):
+    def __get_binary(self, df: pd.DataFrame):
         """
         Формирование бинарной матрицы
         :param df: Фрейм, в тотором значениями параметров являются номера групп, к которым принадлежат исходные значение параметров.
-        :param nan_cols: Будет ли бинарная матрица содержать стобцы для NaN значений параметров
         :return:
         """
         data = df
-        if not nan_cols:
-            data.dropna(inplace=True)
         binary = pd.DataFrame(index=data.index)
         for c in data.columns:
             i = 0
             while i <= data[c].max():
                 binary.loc[data[c] == i, c + '_' + str(int(i))] = 1
                 i += 1
-            if nan_cols:
-                binary.loc[data[c].isna(), c + '_NaN'] = 1
+            binary.loc[data[c].isna(), c + '_NaN'] = 1
         return binary.dropna(how='all', axis='columns').fillna(0)
 
     def __format_binary(self, binary: pd.DataFrame(), data_events: pd.DataFrame(), days_before_defect):
@@ -385,10 +414,67 @@ class ArlBinaryMatrix:
 
 if __name__ == '__main__':
     df_saz = pd.read_csv('resultall.csv', parse_dates=['Дата'])
-    df_saz = arl_data.Data.fix_initial_frame(df_saz)
+    df_saz = arl_data.Data.fix_initial_frame(df_saz, 0)
 
-    bin_hist = ArlBinaryMatrix()
-    bin_hist.create_model(df_saz, 'Nomer elektrolizera', '', BinarizationType.HISTOGRAMS, 'Konus (sht)')
-    bin_hist.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '', anomalies_only = True)
+    m = ArlBinaryMatrix()
 
+    # #тест по гистограммам
+    # m.create_model(df_saz, 'Nomer elektrolizera', '', BinarizationType.HISTOGRAMS, 'Konus (sht)')
+    # print('\n\n\t\t\t ---------------Hists-----------------')
+    # print('bounds', len(m.boundaries), m.boundaries.columns)
+    # #
+    # # m.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '')
+    # # print('default bin', len(m.binary), m.binary.columns)
+    # m.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '', anomalies_only=True)
+    # print('anom only bin', len(m.binary), m.binary.columns)
+    # # m.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '', keep_nan=False,anomalies_only=True)
+    # # print('nan false + anom only bin', len(m.binary), m.binary.columns)
 
+    #
+    # #тест по станартному отклонению
+    # m.create_model(df_saz, 'Nomer elektrolizera', '', BinarizationType.STDDEV, 'Konus (sht)', ind_type=False)
+    # print('\n\n\t\t\t ---------------STDDEV common-----------------')
+    # print('bounds', len(m.boundaries), m.boundaries.columns)
+    #
+    # m.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '')
+    # print('default bin', len(m.binary), m.binary.columns)
+    # m.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '', anomalies_only=True)
+    # print('anom only bin', len(m.binary), m.binary.columns)
+    # m.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '', keep_nan=False, anomalies_only=True)
+    # print('nan false + anom only bin', len(m.binary), m.binary.columns)
+    #
+    # #тест по станартному отклонению индивидуальному
+    # m.create_model(df_saz, 'Nomer elektrolizera', '', BinarizationType.STDDEV, 'Konus (sht)')
+    # print('\n\n\t\t\t ---------------STDDEV ind-----------------')
+    # print('bounds', len(m.boundaries), m.boundaries.columns)
+    #
+    # m.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '')
+    # print('default bin', len(m.binary), m.binary.columns)
+    # m.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '', anomalies_only=True)
+    # print('anom only bin', len(m.binary), m.binary.columns)
+    # m.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '', keep_nan=False, anomalies_only=True)
+    # print('nan false + anom only bin', len(m.binary), m.binary.columns)
+    #
+    # #тест по квартилям
+    # m.create_model(df_saz, 'Nomer elektrolizera', '', BinarizationType.QUARTILES, 'Konus (sht)', ind_type=False)
+    # print('\n\n\t\t\t ---------------QUART common-----------------')
+    # print('bounds', len(m.boundaries), m.boundaries.columns)
+    #
+    # m.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '')
+    # print('default bin', len(m.binary), m.binary.columns)
+    # m.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '', anomalies_only=True)
+    # print('anom only bin', len(m.binary), m.binary.columns)
+    # m.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '', keep_nan=False, anomalies_only=True)
+    # print('nan false + anom only bin', len(m.binary), m.binary.columns)
+    #
+    # #тест по квартилям индивидуально
+    # m.create_model(df_saz, 'Nomer elektrolizera', '', BinarizationType.QUARTILES, 'Konus (sht)')
+    # print('\n\n\t\t\t ---------------QUART ind----------------')
+    # print('bounds', len(m.boundaries), m.boundaries.columns)
+    #
+    # m.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '')
+    # print('default bin', len(m.binary), m.binary.columns)
+    # m.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '', anomalies_only=True)
+    # print('anom only bin', len(m.binary), m.binary.columns)
+    # m.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '', keep_nan=False, anomalies_only=True)
+    # print('nan false + anom only bin', len(m.binary), m.binary.columns)
