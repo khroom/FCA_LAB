@@ -4,6 +4,7 @@ import math
 import datetime
 from enum import Enum
 import joblib
+import arl_data
 
 
 class BinarizationType(Enum):
@@ -99,7 +100,7 @@ class ArlBinaryMatrix:
         else:
             raise Exception("No binary model")
 
-    def transform(self, df: pd.DataFrame, defect, obj_column: str, parse_date: str, keep_nan=True, days_before_defect=1):
+    def transform(self, df: pd.DataFrame, defect, obj_column: str, parse_date: str, keep_nan=True, days_before_defect=1, anomalies_only = False):
         """
         Расчет бинарной матрицы по модели
         :param df: фрейм параметров
@@ -126,13 +127,13 @@ class ArlBinaryMatrix:
         full_df = self.__concat_data_boundaries(data_params, self.boundaries)
 
         if self.bin_type == BinarizationType.STDDEV:
-            classified_data = self.__classify_by_std(full_df)
+            classified_data = self.__classify_by_std(full_df, anomalies_only)
 
         if self.bin_type == BinarizationType.QUARTILES:
             classified_data = self.__classify_by_quartiles(full_df)
 
         if self.bin_type == BinarizationType.HISTOGRAMS:
-            classified_data = self.__classify_by_hist(full_df)
+            classified_data = self.__classify_by_hist(full_df, anomalies_only)
 
         binary = self.__get_binary(classified_data, keep_nan)
         self.binary = self.__format_binary(binary, data_events, days_before_defect)
@@ -216,10 +217,7 @@ class ArlBinaryMatrix:
             # минимально значимая разница между выборками на интервале
             delta = hist.max().max() * thres
             leading = ''
-            start = hist.iloc[0].name
-            end = hist.iloc[hist.count().max() - 1].name
-            boundaries[(c, 0)] = start
-            i = 1
+            i = 0
             for index, row in hist.iloc[1:].iterrows():
                 if (row['clean'] >= delta) | (row['defect'] >= delta):
                     # различие между выборками на основе скользящего среднего
@@ -231,22 +229,22 @@ class ArlBinaryMatrix:
                         if leading == '':
                             leading = group
                         else:
-                            boundaries[(c, i)] = index
+                            boundaries[(c, (i,leading))] = index
                             start = index
                             leading = group
                             i += 1
-            boundaries[(c, i)] = end
         boundaries.columns = pd.MultiIndex.from_tuples(boundaries.columns)
         boundaries.index.name = 'all'
         return boundaries
 
-    def __get_ranges(self, boundaries: pd.DataFrame):
+    def decode(self):
         """
         Формирование таблицы интервалов по границам
-        :param boundaries: Таблица, содержащая границы групп для парамтров
+        :param rule:
         :return:
         """
-        ranges = pd.concat([boundaries], keys=['all'], axis=1).sort_index(axis='index').sort_index(axis='columns')
+        test = {'Vremia pitaniia po bazovoi ustavke_0', 'Vremia APG v ruch.rezh._0', 'Kol-vo doz APG v nedopitke_3', 'Vremia otkl. APG_0', 'El-lit: temp-ra_3', 'Tsel. napr. el-ra_0', 'Vremia zapreta APG_0', 'Doza glinozema_0', 'El-lit: KO_3', 'Cr. vremennaia dobavka_0', 'AlF3: ustavka pitaniia_1', 'RMPR: koeff._0', 'Cr. dobavka po shumam_0', 'Ustavka APG_0', 'Upravlenie: temp-ra el-ta_3', 'RMPR: vremia zapreta_0', 'El-lit: CaF2_0', 'Tsel. temp. el-ta_0', 'Napr. zad._0', 'El-lit: MgF2_0', 'Kol-vo doz APG v teste_3', 'Shum_0'}
+        ranges = pd.concat([self.boundaries], keys=['all'], axis=1).sort_index(axis='index').sort_index(axis='columns')
         for c in ranges.columns.get_level_values(1).unique():
             i = 0
             while i < len(ranges[('all', c)].columns) - 1:
@@ -258,7 +256,9 @@ class ArlBinaryMatrix:
         ranges = ranges[['min', 'max']]
         if ranges.index.names[0] == 'all':
             ranges.index = ranges.index.droplevel(0)
-        return ranges
+        t = ranges.loc[6.0].swaplevel(0,1).loc[list(test)]
+        t.index = t.index.droplevel(1)
+        return t
 
     def __concat_data_boundaries(self, data: pd.DataFrame, boundaries: pd.DataFrame):
         """
@@ -277,7 +277,7 @@ class ArlBinaryMatrix:
             df.index = df.index.droplevel(0)
             return df
 
-    def __classify_by_std(self, df: pd.DataFrame):
+    def __classify_by_std(self, df: pd.DataFrame, anomalies_only=False):
         """
         Классификация значений параметров по стандартному отклонению.
         Три интервала для каждого параметра. Граничные точки центрального интервала включены в центральынй интервал.
@@ -287,7 +287,8 @@ class ArlBinaryMatrix:
         classified = pd.DataFrame(index=df.index)
         for c in df.columns.get_level_values(0).unique():
             classified.loc[df[(c, 'value')] < df[(c, 1)], c] = 0
-            classified.loc[df[(c, 'value')].between(df[(c, 1)], df[(c, 2)]), c] = 1
+            if not anomalies_only:
+                classified.loc[df[(c, 'value')].between(df[(c, 1)], df[(c, 2)]), c] = 1
             classified.loc[df[(c, 'value')] > df[(c, 2)], c] = 2
         return classified
 
@@ -306,7 +307,7 @@ class ArlBinaryMatrix:
             classified.loc[df[(c, 'value')] > df[(c, 3)], c] = 3
         return classified
 
-    def __classify_by_hist(self, df: pd.DataFrame):
+    def __classify_by_hist(self, df: pd.DataFrame, anomalies_only=False):
         """
         Классификация значений параметров по пересечениям гистограмм выборок "чистых" и "с нарушениями".
         Разное количество интевалов для параметров. Классификации подлежат только параметры имеющие два и более интервалов.
@@ -316,11 +317,27 @@ class ArlBinaryMatrix:
         """
         classified = pd.DataFrame(index=df.index)
         for c in df.columns.get_level_values(0).unique():
-            i = 0
-            if len(df[c].columns) > 3:
-                while i < len(df[c].columns) - 2:
-                    classified.loc[(df[(c, 'value')] > df[(c, i)]) & (df[(c, 'value')] <= df[(c, i + 1)]), c] = i
+            df_column = df[c]
+            for group, data in df_column.groupby('Nomer elektrolizera'):
+                dfc = data.dropna(axis=1, how='all')
+                i = 0
+                if len(dfc.columns) > 1:
+                    if (i, 'defect') in dfc.columns:
+                        classified.loc[dfc[dfc['value'] <= dfc[(i, 'defect')]].index, c] = i
+                    if (not anomalies_only) & ((i, 'clean') in dfc.columns):
+                        classified.loc[dfc[dfc['value'] <= dfc[(i, 'clean')]].index, c] = i
                     i += 1
+                    while i <= dfc.columns[-1][0]:
+                        if (i, 'defect') in dfc.columns:
+                            classified.loc[dfc[(dfc['value'] > dfc[(i-1, 'clean')]) & (dfc['value'] <= dfc[(i, 'defect')])].index, c] = i
+                        if (not anomalies_only) & ((i, 'clean') in dfc.columns):
+                            classified.loc[dfc[(dfc['value'] > dfc[(i-1, 'defect')]) & (dfc['value'] <= dfc[(i, 'clean')])].index, c] = i
+                        i += 1
+                    #последние интервалы. Если последняя граница 'clean', значит, последний интервал - 'defect'
+                    if (i-1, 'clean') in dfc.columns:
+                        classified.loc[dfc[(dfc['value'] > dfc[(i-1, 'clean')])].index, c] = i
+                    if (not anomalies_only) & ((i-1, 'defect') in dfc.columns):
+                        classified.loc[dfc[(dfc['value'] > dfc[(i-1, 'defect')])].index, c] = i
         return classified
 
     def __get_binary(self, df: pd.DataFrame, nan_cols=True):
@@ -365,16 +382,13 @@ class ArlBinaryMatrix:
         formatted_binary = binary.fillna(0).astype('int64').reset_index()
         return formatted_binary
 
+
 if __name__ == '__main__':
     df_saz = pd.read_csv('resultall.csv', parse_dates=['Дата'])
-    df_saz.drop(['Индекс', 'АЭ: кол-во', 'АЭ: длит.', 'АЭ: напр. ср.', 'Пена: снято с эл-ра', 'Срок службы',
-             'Кол-во поддер. анодов', 'АЭ: кол-во локальных', 'Отставание (шт)', 'Другое нарушение (шт)',
-             'Нарушение', 'Анод', 'Выливка: отношение скорости', 'Выход по току: Л/О', 'Подина: напр.',
-             'Кол-во доз АПГ в руч.реж.', 'Конус (да/нет)'], axis='columns', inplace=True)
-    import unidecode
-    # замена кириллицы на латинницу
-    for column in df_saz.columns:
-        df_saz.rename(columns={column: unidecode.unidecode(column).replace('\'', '')}, inplace=True)
-    df_saz = df_saz.set_index(['Nomer elektrolizera','Data'])
-    bin_hist = arl_binary_matrix()
-    bin_hist.create_model(df_saz, 'Nomer elektrolizera', '', BinarizationType.QUARTILES, 'Konus (sht)', ind_type=False)
+    df_saz = arl_data.Data.fix_initial_frame(df_saz)
+
+    bin_hist = ArlBinaryMatrix()
+    bin_hist.create_model(df_saz, 'Nomer elektrolizera', '', BinarizationType.HISTOGRAMS, 'Konus (sht)')
+    bin_hist.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '', anomalies_only = True)
+
+
