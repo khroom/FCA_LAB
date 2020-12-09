@@ -118,7 +118,8 @@ class ArlBinaryMatrix:
             defect = [defect]
         data_events = df[defect]
         data_params = df.drop(defect, axis=1)
-        full_df = self.__concat_data_boundaries(data_params, self.boundaries)
+        cross_cols = list(set(data_params.columns).intersection(self.boundaries.columns.get_level_values(0)))
+        full_df = self.__concat_data_boundaries(data_params[cross_cols], self.boundaries[cross_cols])
 
         if self.bin_type == BinarizationType.STDDEV:
             classified_data = self.__classify_by_std(full_df)
@@ -417,13 +418,11 @@ if __name__ == '__main__':
     df_saz = arl_data.Data.fix_initial_frame(df_saz, 0)
 
     m = ArlBinaryMatrix()
-
-    # #тест по гистограммам
-    # m.create_model(df_saz, 'Nomer elektrolizera', '', BinarizationType.HISTOGRAMS, 'Konus (sht)')
+   #тест по гистограммам
+    m.create_model(df_saz, 'Nomer elektrolizera', '', BinarizationType.HISTOGRAMS, 'Konus (sht)')
     # print('\n\n\t\t\t ---------------Hists-----------------')
     # print('bounds', len(m.boundaries), m.boundaries.columns)
-    # #
-    # # m.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '')
+    m.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '')
     # # print('default bin', len(m.binary), m.binary.columns)
     # m.transform(df_saz, 'Konus (sht)', 'Nomer elektrolizera', '', anomalies_only=True)
     # print('anom only bin', len(m.binary), m.binary.columns)
