@@ -60,7 +60,13 @@ class ArlBinaryMatrix:
             self.boundaries = self.__get_boundaries_by_quartiles(stats)
 
         if bin_type == BinarizationType.HISTOGRAMS:
-            self.boundaries = self.__get_boundaries_by_hist(data_params, data_events, day_before=days_before_defect)
+            if ind_type:
+                self.boundaries = pd.DataFrame()
+                for group, data in data_params.groupby(obj_column):
+                    self.boundaries = self.boundaries.append(pd.concat([self.__get_boundaries_by_hist(data, data_events.loc[data.index], day_before=days_before_defect)], keys=[group], names=[obj_column]))
+                self.boundaries.index = self.boundaries.index.droplevel(1)
+            else:
+                self.boundaries = self.__get_boundaries_by_hist(data_params, data_events, day_before=days_before_defect)
         self.binary = None
 
     def load_model(self, file: str):
@@ -148,7 +154,7 @@ class ArlBinaryMatrix:
         if self.bin_type == BinarizationType.HISTOGRAMS:
             classified_data = self.__classify_by_hist(full_df)
             binary = self.__get_binary(classified_data)
-            if anomalies_only:
+            if anomalies_only & (len(self.boundaries) == 1):
                 normal = set()
                 for p in self.boundaries.columns.get_level_values(0).unique():
                     for c in self.boundaries[p].columns:
@@ -221,7 +227,7 @@ class ArlBinaryMatrix:
         #нарушение - пять дней от day_before
         defect_period = []
         for index, value in data_events[data_events > 0].dropna(how='all').iterrows():
-            period_dates = pd.date_range(end=index[1] - datetime.timedelta(days=day_before), periods=6)
+            period_dates = pd.date_range(end=index[1] - datetime.timedelta(days=day_before), periods=3)
             for d in period_dates:
                 if (index[0], d) in df.index:
                     defect_period.append((index[0], d))
