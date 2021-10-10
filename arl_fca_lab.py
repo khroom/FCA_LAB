@@ -12,6 +12,7 @@ from networkx.drawing.nx_agraph import graphviz_layout
 from fca_lab import fca_lattice
 import arl_binarization
 import pickle
+import arl_data
 
 class arl_fca_lab:
     def __init__(self, bin_type: arl_binarization.BinarizationType = arl_binarization.BinarizationType.HISTOGRAMS,
@@ -35,8 +36,10 @@ class arl_fca_lab:
         # поставить условие на ind_type
         self.objs = []
         self.bin_matrix = arl_binarization.ArlBinaryMatrix()
+        self.anomalies_only = False
+        self.threshold = 0.34
 
-    def fit_model(self, df: pd.DataFrame,  defect: str, obj_column: str, parse_date: str):
+    def fit_model(self, df: pd.DataFrame,  defect: str, obj_column: str, parse_date: str, anomalies_only: bool=False):
         """
         :param df:
         :param defect:
@@ -45,14 +48,18 @@ class arl_fca_lab:
         :return:
         """
         self.defect = defect
-        self.objs = list(df.index.get_level_values(0).unique())
-        # self.objs = [5.0]
+        if self.ind_type:
+            self.objs = list(df.index.get_level_values(0).unique())
+        else:
+            self.objs = ['all']
+        self.anomalies_only = anomalies_only
 
         self.bin_matrix.create_model(df, obj_column, parse_date, self.bin_type, defect, self.ind_type)
 
         print('Модель создана')
-        self.bin_matrix = self.bin_matrix.transform(df, self.defect, obj_column, parse_date, self.keep_nan,
-                                                    self.days_before_defect)
+        self.bin_matrix.transform(df, self.defect, obj_column, parse_date, self.keep_nan,
+                                                    self.days_before_defect, self.anomalies_only)
+        # anomalies_only
         print('Данные бинаризованы')
         """
         Подготовка контекста для расчета решетки - pdf. Из исходного датасета убираем описательные столбцы,
@@ -63,9 +70,14 @@ class arl_fca_lab:
             # Подумать как быть со служебными параметрами если они часть мультииндекса
             # И сделать для нескольких дефектов. Проверить как будет работать с [obj_column, parse_date]
             start_time = time.time()
-            pdf = self.bin_matrix[(self.bin_matrix['1_day_before'] == 1) & (self.bin_matrix[obj_column] == obj)].drop(
-                [obj_column, parse_date],
-                axis='columns')
+            if not(obj == 'all'):
+                pdf = self.bin_matrix.binary[
+                    (self.bin_matrix.binary['1_day_before'] == 1) & (self.bin_matrix.binary[obj_column] == obj)].drop(
+                    [obj_column, parse_date], axis='columns')
+
+            else:
+                pdf = self.bin_matrix.binary[(self.bin_matrix.binary['1_day_before'] == 1)].drop(
+                    [obj_column, parse_date], axis='columns')
             # Инициализация решетки по урезанному контексту
             lat = fca_lattice(pdf)
             print("Объект ", obj, "\nКол-во нарушений:", len(pdf))
@@ -76,14 +88,9 @@ class arl_fca_lab:
 
             """ 
             Датафрейм оценок концептов. 
-            Можно было бы совместить с self.lat.concepts, но это список и он во вложеном объекте.
-            Важно формировать после расчета концептов.
             """
-            # self.concepts_df = pd.DataFrame(index=range(len(self.lat.concepts)),
-            #                                 columns=['param_support', 'support', 'confidence', 'lift', 'cardinality', 'intent'])
-
             start_time = time.time()
-            self.confidence_df[obj] = self.rules_evaluation(lat, self.bin_matrix, pdf)
+            self.confidence_df[obj] = self.rules_evaluation(lat, self.bin_matrix.binary, pdf)
             print("оценка концептов --- %s seconds ---" % (time.time() - start_time))
 
     def rules_evaluation(self, lat: fca_lattice, df: pd.DataFrame, pdf: pd.DataFrame):
@@ -115,23 +122,6 @@ class arl_fca_lab:
         return confidence_df
 
 
-    def rules_describe(self, weight_df: pd.DataFrame):
-        """
-        ToDo: Возможно пригодиться
-        Описание правил формальным образом для генерации отчета по проекту. Вариант.
-        :param weight_df: Датафрейм оценок в разрезе ванн
-        :return:
-        """
-        df = weight_df.groupby(by='VANNA', axis=0).max()
-        for i in weight_df.iloc[:, 2:].columns:
-            print('Правило №', i)
-            print(self.concepts[i]['B'].difference({self.param}), '--> {\'', self.param, '\'}')
-            print('Мощность:', len(self.concepts[i]['A']))
-            # print('Частичная поддержка: ', self.concepts[i]['part_support'])
-            # print('Полная поддержка: ', self.concepts[i]['full_support'])
-            print('Вес: ', np.around(weight_df[i].max(), decimals=2))
-            print('Количество ванн:', df[i].count())
-            print('---')
 
     def rules_scatter(self, obj_num, how: ['show', 'save'] = 'show', alpha=0.8, s=50):
         """
@@ -161,11 +151,11 @@ class arl_fca_lab:
     def get_prediction(self, row_set: set, obj_num, support_threshold=0):
         # weight_df = self.concepts_df.sort_values(by='confidence', axis=0, ascending=False)
         for row_index in self.confidence_df[obj_num].index:
-            if self.confidence_df[obj_num].loc[row_index, 'd_support'] >=support_threshold:
+            if self.confidence_df[obj_num].loc[row_index, 'confidence'] >= self.threshold:
                 rule_set = self.confidence_df[obj_num].loc[row_index, "B"]
                 if isinstance(rule_set, Set):
                     if rule_set.difference(row_set) == {'1_day_before'}:
-                        return row_index
+                        return self.confidence_df[obj_num].loc[row_index, 'confidence'], row_index
         return None
 
 
@@ -192,52 +182,53 @@ def load_model(file_name):
 
 
 if __name__ == '__main__':
-    # df = pd.read_csv('.\\saz_binary\\CAZ_binary_stdev_individual_true.csv', index_col=0, sep=',')
-    # param = 'Konus (da/net)'
+    # matrix = new_model.bin_matrix.transform(dataset, new_model.defect, 'objt', 'dt', new_model.keep_nan, 0, new_model.anomalies_only)
 
     # df = pd.read_csv('.\\saz_binary\\Saz_histogramms_binary.csv', index_col=0, sep=',')
     print('Загрузка исходных данных')
-    df = pd.read_csv('.\\resultall.csv', parse_dates=['Дата'])
+    date_name = 'dt'
+    obj_name = 'objt'
+    defect_name = 'konus'
+    dif_date = '2020.09.01'
 
-    test_df = df[(df['Дата'] >= '2020.02.01')&(df['Дата'] < '2020.05.01')]
+    el_list = [0, 1, 2, 3, 4, 5, 6, 7]
+
+    df = pd.read_csv('../FCA_LAB/result_19_01-20_11.csv', parse_dates=[date_name])
+
+    # Предобработка датасета
+    add_df = df['violation']
+    df = df.drop(['violation','anod'], axis=1)
+    # obj_restr = 9082
+    train_df = df[(df[date_name] < dif_date)&(df[obj_name].isin(el_list))]
+    # & (df['Номер электролизера'] == obj_restr)
+
+    test_df = df[(df[date_name] >= dif_date)&(df[obj_name].isin(el_list))]
     # test_df = df[df['Дата'] >= '01.01.2020']
-    train_df = df[(df['Дата'] >= '2019.01.01')&(df['Дата'] < '2020.01.01')]
+
     print('Выполнено')
-    print('Переход на латиницу')
-    test_df.drop(['Индекс', 'АЭ: кол-во', 'АЭ: длит.', 'АЭ: напр. ср.', 'Пена: снято с эл-ра', 'Срок службы',
-                  'Кол-во поддер. анодов', 'АЭ: кол-во локальных', 'Отставание (шт)', 'Другое нарушение (шт)',
-                  'Нарушение', 'Анод', 'Выливка: отношение скорости', 'Выход по току: Л/О', 'Подина: напр.',
-                  'Кол-во доз АПГ в руч.реж.', 'Конус (да/нет)'], axis='columns', inplace=True)
 
-    # замена кириллицы на латинницу
-    for column in test_df.columns:
-        test_df.rename(columns={column: unidecode.unidecode(column).replace('\'', '')}, inplace=True)
-    test_df = test_df.set_index(['Nomer elektrolizera', 'Data'])
+    print('Подготовка')
 
-    train_df.drop(['Индекс', 'АЭ: кол-во', 'АЭ: длит.', 'АЭ: напр. ср.', 'Пена: снято с эл-ра', 'Срок службы',
-                  'Кол-во поддер. анодов', 'АЭ: кол-во локальных', 'Отставание (шт)', 'Другое нарушение (шт)',
-                  'Нарушение', 'Анод', 'Выливка: отношение скорости', 'Выход по току: Л/О', 'Подина: напр.',
-                  'Кол-во доз АПГ в руч.реж.', 'Конус (да/нет)'], axis='columns', inplace=True)
+    train_df.set_index([obj_name, date_name], inplace=True)
+    test_df.set_index([obj_name, date_name], inplace=True)
 
-    # замена кириллицы на латинницу
-    for column in train_df.columns:
-        train_df.rename(columns={column: unidecode.unidecode(column).replace('\'', '')}, inplace=True)
-    train_df = train_df.set_index(['Nomer elektrolizera', 'Data'])
+    test_df = test_df.drop(list(set(test_df.columns).difference(set(train_df.columns))), axis=1)
     print('Выполнено')
+
     print('Расчет модели')
 
-    # model = arl_fca_lab(bin_type=arl_binarization.BinarizationType.QUARTILES)
-    # model.fit_model(train_df,'Konus (sht)','Nomer elektrolizera', 'Data')
+    model = arl_fca_lab(bin_type=arl_binarization.BinarizationType.STDDEV, ind_type=False, keep_nan=True)
+    model.fit_model(train_df, defect_name, obj_name, date_name, anomalies_only=True)
 
-    model = load_model('model_QUAR')
-    model.bin_matrix = arl_binarization.ArlBinaryMatrix()
-    model.bin_matrix.create_model(train_df, 'Nomer elektrolizera', 'Data', model.bin_type, model.defect, model.ind_type,
-                                 model.days_before_defect)
+    # model = load_model('model_STD')
+    # model.bin_matrix = r.ArlBinaryMatrix()
+    # model.bin_matrix.create_model(train_df, 'Nomer elektrolizera', 'Data', model.bin_type, model.defect, model.ind_type,
+    #                              model.days_before_defect)
     # model.rules_scatter(7.0, 'save')
     print('Выполнено')
     print('Подготовка тестового датасета')
-    test_matrix = model.bin_matrix.transform(test_df, model.defect, 'Nomer elektrolizera', 'Data',
-                                             model.keep_nan, model.days_before_defect)
+    test_matrix = model.bin_matrix.transform(test_df, model.defect, obj_name, date_name,
+                                             model.keep_nan, model.days_before_defect, model.anomalies_only)
     # dump_model(model,'model_QUAR')
 
     print('Выполнено')
@@ -245,10 +236,14 @@ if __name__ == '__main__':
     test_results = pd.DataFrame(index=test_matrix.index, columns=['Object', 'Prediction', 'Fact', 'Rule'])
 
     for i in test_matrix.index:
-        obj_num = test_matrix.loc[i, 'Nomer elektrolizera']
+
+        if model.ind_type:
+            obj_num = test_matrix.loc[i, obj_name]
+        else:
+            obj_num = 'all'
         rule_index = model.get_prediction(get_row(test_matrix, i), obj_num)
-        test_results.loc[i, 'Object'] = obj_num
-        test_results.loc[i, 'Fact'] = test_matrix.iloc[i, -1]
+        test_results.loc[i, 'Object'] = test_matrix.loc[i, obj_name]
+        test_results.loc[i, 'Fact'] = test_matrix.loc[i, '1_day_before']
 
         if rule_index == None:
             test_results.loc[i, 'Prediction'] = 0
@@ -260,34 +255,42 @@ if __name__ == '__main__':
         print('Index:', i, ', Object:', test_results.loc[i, 'Object'], ', Predict:', test_results.loc[i, 'Prediction'],
               ', Fact:',test_results.loc[i, 'Fact'])
     print('Выполнено')
-    test_results = pd.concat([test_results, test_matrix[['Data', 'Konus (sht)', '1_day_before']]], axis=1)
-    threshold_f1= pd.DataFrame(columns=[ 'Threshold', 'precision', 'recall'])
-    for threshold in numpy.arange(0.01, 0.99, 0.01):
-        threshold_f1.loc[threshold, 'TP'] = len(
-            test_results[(test_results.Fact == 1) &
-                         (test_results.Prediction >= threshold)])+ len(
-            test_results[(test_results['Konus (sht)'] != 0) &
-                         (test_results.Prediction >= threshold)])
+    test_results = pd.concat([test_results, test_matrix[[date_name, defect_name, '1_day_before']]], axis=1)
 
-        threshold_f1.loc[threshold, 'FP'] = len(
-            test_results[(test_results.Fact == 0) &
-                         (test_results.Prediction >= threshold) &
-                         (test_results['Konus (sht)'] == 0)])
-        threshold_f1.loc[threshold, 'FN'] = len(
-            test_results[(test_results.Fact == 1) & (test_results.Prediction < threshold)])
-        threshold_f1.loc[threshold, 'Threshold'] = threshold
-        threshold_f1.loc[threshold, 'recall'] = threshold_f1.loc[threshold, 'TP'] / (
-                    threshold_f1.loc[threshold, 'TP'] + threshold_f1.loc[threshold, 'FN'])
-        threshold_f1.loc[threshold, 'precision'] = threshold_f1.loc[threshold, 'TP'] / (
-                    threshold_f1.loc[threshold, 'TP'] + threshold_f1.loc[threshold, 'FP'])
-        # threshold_f1.loc[threshold, 'F1'] = 2 / (1/threshold_f1.loc[threshold, 'recall'] +
-        #                                          1/threshold_f1.loc[threshold, 'precision'])
-
-    plt.plot(threshold_f1['Threshold'], threshold_f1['TP'] / len(test_results[(test_results['Konus (sht)'] == 1)|
-                                                                         (test_results['1_day_before'] == 1)]), 'r',
-             threshold_f1['Threshold'], threshold_f1['FP'] / len(test_results[(test_results['Konus (sht)'] == 0)&
-                                                                         (test_results['1_day_before'] == 0)]), 'b',
-             threshold_f1['Threshold'], threshold_f1['FN'] / len(test_results[(test_results['Konus (sht)'] == 1)|
-                                                                         (test_results['1_day_before'] == 1)]), 'g')
-    plt.savefig('quar_02-05_1.png')
-
+    # threshold_f1= pd.DataFrame(columns=[ 'Threshold'])
+    # for threshold in numpy.arange(0.01, 0.99, 0.01):
+    #     threshold_f1.loc[threshold, 'TP'] = len(
+    #         test_results[(test_results.Fact == 1)&(test_results.Prediction >= threshold)])
+    #     threshold_f1.loc[threshold, 'FP'] = len(
+    #         test_results[(test_results.Fact == 0)&(test_results.Prediction >= threshold)])
+    #     threshold_f1.loc[threshold, 'FN'] = len(
+    #         test_results[(test_results.Fact == 1) & (test_results.Prediction < threshold)])
+    #     threshold_f1.loc[threshold, 'TN'] = len(
+    #         test_results[(test_results.Fact == 0) & (test_results.Prediction < threshold)])
+    #     threshold_f1.loc[threshold, 'TN_TP'] = threshold_f1.loc[threshold, 'TN']+threshold_f1.loc[threshold, 'TP']
+    #     threshold_f1.loc[threshold, 'Threshold'] = threshold
+    #
+    # fig, ax = plt.subplots()
+    # ax.plot(threshold_f1['Threshold'], threshold_f1['TP'] / len(test_results[test_results['Fact'] == 1]), 'g',
+    #         threshold_f1['Threshold'], threshold_f1['FP'] / len(test_results[(test_results[defect_name] == 0)&(test_results['Fact'] == 0)]), 'r')
+    #
+    # # plt.legend(['Истинно положительных', 'Ложно положительных'])
+    # plt.xlabel("Пороговое значение")
+    # plt.ylabel("Доля")
+    # # plt.title('Vanna-9001, bin_type=STDDEV, ind_type=True, \nkeep_nan=True, anomalies_only=False, \n'
+    # #           'train(2018.01.01-2019.01.01), test(2019.01.01-2019.08.01)')
+    # plt.legend(['Истинно положительные', 'Ложно положительные'])
+    # plt.savefig('temp_std.png')
+    # plt.clf()
+    #
+    # fig, ax = plt.subplots()
+    # ax.bar(test_results.index, test_results[test_results.Object == 0]['Prediction'], color=plt.cm.Paired(1), label='Prediction')
+    # ax.bar(test_results.index, test_results['Fact'], color=plt.cm.Paired(7), alpha=0.6, label='Fact')
+    # ax.legend()
+    # plt.xlabel("Порядковый индекс")
+    # plt.ylabel("Коэффициент уверенности")
+    # plt.savefig('temp_bar_std.png')
+    #
+    # sr = (threshold_f1['TN_TP'] / len(test_results))
+    # print(threshold_f1[sr==sr.max()])
+    # print(len(test_results[(test_results[defect_name] == 1) & (test_results.Prediction >= 0.61) & (test_results.Fact == 0)]))

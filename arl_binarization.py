@@ -358,7 +358,7 @@ class ArlBinaryMatrix:
         classified = pd.DataFrame(index=df.index)
         for c in df.columns.get_level_values(0).unique():
             df_column = df[c]
-            for group, data in df_column.groupby('Nomer elektrolizera'):
+            for group, data in df_column.groupby(self.__obj_column):
                 dfc = data.dropna(axis=1, how='all')
                 i = 0
                 if len(dfc.columns) > 1:

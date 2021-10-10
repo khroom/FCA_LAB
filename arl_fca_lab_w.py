@@ -181,8 +181,8 @@ if __name__ == '__main__':
     # df = pd.read_csv('.\\saz_binary\\CAZ_binary_stdev_individual_true.csv', index_col=0, sep=',')
     # param = 'Konus (da/net)'
 
-    df = pd.read_csv('.\\saz_binary\\Saz_histogramms_binary.csv', index_col=0, sep=',')
-    range_df = pd.read_csv('.\\saz_binary\\Saz_histogramm_ranges.csv', index_col=0, sep=',')
+    df = pd.read_csv('../../../FCA_LAB/saz_binary/Saz_histogramms_binary.csv', index_col=0, sep=',')
+    range_df = pd.read_csv('../../../FCA_LAB/saz_binary/Saz_histogramm_ranges.csv', index_col=0, sep=',')
     df = df.drop(columns='Konus (da/net)')
     param = 'DAY_BEFORE_KONUS'
 
