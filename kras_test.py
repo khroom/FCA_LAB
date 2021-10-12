@@ -4,27 +4,63 @@ import arl_data
 import pandas as pd
 
 if __name__ == '__main__':
-    df = pd.read_csv('.\\kras_binary\\resultall KRAZ.csv', parse_dates=['Дата'])
-    params = ['Эл-лит: КО', 'Эл-лит: CaF2', 'Ток серии (КПП)', 'Металл: уровень',
-        'Эл-т: уровень', 'Эл-лит: темп-ра', 'Металл: Fe', 'Металл: Si',
-       'Выливка: Л/О', 'Время на голод.', 'РМПР: кол-во ВИРА',
-       'РМПР: длит. ВИРА', 'РМПР: кол-во МАЙНА', 'РМПР: длит. МАЙНА',
-       'РМПР: коэфф.', 'Кол-во доз АПГ в авт.реж.', 'Время АПГ в руч.реж.',
-       'Время запрета АПГ', 'Напр. эл-ра', 'Напр. зад.', 'Доб. напр.', 'Шум',
-       'Длит. шума', 'Напр. анода', 'Обр. ЭДС', 'AlF3: добавка',
-       'Вторичный криолит: добавка', 'Пена: снято с эл-ра', 'Выливка: Кр/весы',
-       'Выливка: задание', 'Уставка АПГ', 'Состояние КПК',
-       'Расст. до колокола', 'Пустота анода', 'Ножка', 'Уров. КПКВТ',
-       'Темп-ра КПКВТ', 'Угольная пена', 'ПАК: время запрета', 'ПАК: кол-во',
-       'ПАК: сумм. длит. авт.', 'ПАК: сумм. длит. руч.',
-       'Обработанная сторона', 'Кол-во перетяжек ан.рамы',
-        'Срок службы', 'Эл-лит: MgF2', 'Напр. прив.',
-        'Период шума', 'Напряжение ошиновки', 'Кол-во доз АПГ в руч.реж.', 'AlF3: кол-во доз в авт.реж.']
+    print('Загрузка исходных данных')
+    init_df = pd.read_csv('.\\kras_binary\\resultall KRAZ.csv', parse_dates=['Дата'])
 
-    faults = ['Кол-во нарушений на аноде','Кол-во трещин на аноде','Кол-во кусков под анодом', 'АЭ: кол-во', 'АЭ: напр. ср.', 'АЭ: длит.']
-
-    df2 = arl_data.Data.fix_initial_frame(df, params, faults, 'Номер электролизера','Дата')
     # Исправление ошибки в номере электролизера было 50000, стало 5000, для всех подобных случаев
-    # df['Номер электролизера'] = pd.Series([i if i < 50000 else i - 45000 for i in df['Номер электролизера']])
-    # objt_list_5 = [i for i in df['Номер электролизера'].unique() if i < 6000]
-    # objt_list_6 = [i for i in df['Номер электролизера'].unique() if i >= 6000]
+    init_df['Номер электролизера'] = pd.Series([i if i < 50000 else i - 45000 for i in init_df['Номер электролизера']])
+
+    objt_list_5 = [i for i in init_df['Номер электролизера'].unique() if i < 6000]
+    objt_list_6 = [i for i in init_df['Номер электролизера'].unique() if i >= 6000]
+
+    params = ['Срок службы', 'Эл-лит: темп-ра', 'Выливка: Л/О', 'РМПР: коэфф.', 'Кол-во доз АПГ в авт.реж.',
+              'Напр. эл-ра', 'Шум', 'Пена: снято с эл-ра', 'Пустота анода', 'Уров. КПКВТ', 'Темп-ра КПКВТ']
+    start_date = pd.to_datetime('2020.04.21')
+    dif_date = pd.to_datetime('2021.04.21')
+    df = arl_data.Data.fix_initial_frame(init_df, params, 'Кол-во трещин на аноде', 'Номер электролизера', 'Дата')
+    index = pd.IndexSlice
+
+    # Исследование для пятого корпуса
+    train_df = df.loc[index[objt_list_5, start_date:dif_date], :]
+    test_df = df.loc[index[objt_list_5, dif_date + pd.Timedelta(days=1):], :]
+
+    print('Выполнено')
+    print('Расчет модели')
+
+    model = arl_fca_lab.arl_fca_lab(bin_type=arl_binarization.BinarizationType.QUARTILES, ind_type=False, keep_nan=True)
+    model.fit_model(train_df, arl_data.Data.defect_name, arl_data.Data.cell_name, arl_data.Data.date_name, anomalies_only=True)
+
+    print('Выполнено')
+    print('Подготовка тестового датасета')
+
+    test_matrix = model.bin_matrix.transform(test_df, model.defect, arl_data.Data.cell_name, arl_data.Data.date_name,
+                                             model.keep_nan, model.days_before_defect, model.anomalies_only)
+
+    print('Выполнено')
+    print('Расчет оценок')
+
+test_results = pd.DataFrame(index=test_matrix.index, columns=['Object', 'Prediction', 'Fact', 'Rule'])
+
+for i in test_matrix.index:
+
+    if model.ind_type:
+        obj_num = test_matrix.loc[i, arl_data.Data.cell_name]
+    else:
+        obj_num = 'all'
+    rule_index = model.get_prediction(arl_fca_lab.get_row(test_matrix, i), obj_num)
+    test_results.loc[i, 'Object'] = test_matrix.loc[i, arl_data.Data.cell_name]
+    test_results.loc[i, 'Fact'] = test_matrix.loc[i, '1_day_before']
+
+    if rule_index == None:
+        test_results.loc[i, 'Prediction'] = 0
+        test_results.loc[i, 'Rule'] = -1
+    else:
+        test_results.loc[i, 'Prediction'] = model.confidence_df[obj_num].loc[rule_index, 'confidence']
+        test_results.loc[i, 'Rule'] = rule_index
+        # model.confidence_df[obj_num].loc[rule_index, 'B']
+    print('Index:', i, ', Object:', test_results.loc[i, 'Object'], ', Predict:', test_results.loc[i, 'Prediction'],
+          ', Fact:', test_results.loc[i, 'Fact'])
+
+print('Выполнено')
+test_results = pd.concat([test_results, test_matrix[[arl_data.Data.date_name, arl_data.Data.defect_name, '1_day_before']]], axis=1)
+
