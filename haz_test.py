@@ -7,10 +7,7 @@ import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
     print('Загрузка исходных данных')
-    init_df = pd.read_csv('.\\kras_binary\\result.csv', parse_dates=['Дата'])
-
-    # Исправление ошибки в номере электролизера было 50000, стало 5000, для всех подобных случаев
-    init_df['Номер электролизера'] = pd.Series([i if i < 50000 else i - 45000 for i in init_df['Номер электролизера']])
+    init_df = pd.read_csv('result_19_01-20_11.csv', parse_dates=['dt'])
 
     objt_list_5 = [i for i in init_df['Номер электролизера'].unique() if i < 6000]
     objt_list_6 = [i for i in init_df['Номер электролизера'].unique() if i >= 6000]
