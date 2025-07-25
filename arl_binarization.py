@@ -336,10 +336,8 @@ class ArlBinaryMatrix:
             # 1 - mean - std (нижняя граница нормального диапазона)
             # 2 - mean + std (верхняя граница нормального диапазона)
             # 3 - максимальное значение
-            boundaries[(c, 0)] = stats[(c, 'amin')]  # Минимальное значение
             boundaries[(c, 1)] = stats[(c, 'mean')] - stats[(c, 'std')]  # Нижняя граница
             boundaries[(c, 2)] = stats[(c, 'mean')] + stats[(c, 'std')]  # Верхняя граница
-            boundaries[(c, 3)] = stats[(c, 'amax')]  # Максимальное значение
             
         boundaries.columns = pd.MultiIndex.from_tuples(boundaries.columns)
         return boundaries
