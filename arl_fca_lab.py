@@ -1,13 +1,13 @@
-from collections import Set  # Для работы с множествами (устаревшее, в новых версиях Python используйте collections.abc)
+from collections.abc import Set  # Для работы с множествами (устаревшее, в новых версиях Python используйте collections.abc)
 import numpy  # Для математических операций
-import unidecode  # Для работы с Unicode (не используется в текущем коде)
+# import unidecode  # Для работы с Unicode (не используется в текущем коде)
 import numpy as np  # Для математических операций (альтернативное имя)
 import pandas as pd  # Для работы с табличными данными
 import time  # Для измерения времени выполнения
-import networkx as nx  # Для работы с графами (не используется в текущем коде)
+# import networkx as nx  # Для работы с графами (не используется в текущем коде)
 import matplotlib.pyplot as plt  # Для визуализации данных
 import joblib  # Для сохранения/загрузки моделей
-from networkx.drawing.nx_agraph import graphviz_layout  # Для визуализации графов (не используется)
+# from networkx.drawing.nx_agraph import graphviz_layout  # Для визуализации графов (не используется)
 from fca_lab import fca_lattice  # Для работы с решетками формальных понятий (FCA)
 import arl_binarization  # Модуль для бинаризации данных
 import pickle  # Для сериализации объектов
@@ -311,23 +311,23 @@ if __name__ == '__main__':
     # Основной блок выполнения (пример использования класса)
 
     print('Загрузка исходных данных')
-    date_name = 'dt'  # Название столбца с датами
-    obj_name = 'objt'  # Название столбца с номерами электролизеров
-    defect_name = 'konus'  # Название целевого параметра (дефекта)
-    dif_date = '2020.09.01'  # Дата разделения на обучающую и тестовую выборки
+    date_name = 'DATE_TRUNC'  # Название столбца с датами
+    obj_name = 'POT_ID'  # Название столбца с номерами электролизеров
+    defect_name = 'Вид  нарушения_количество'  # Название целевого параметра (дефекта)
+    dif_date = '2025-01-01'  # Дата разделения на обучающую и тестовую выборки
 
-    el_list = [0, 1, 2, 3, 4, 5, 6, 7]  # Список электролизеров для анализа
+    el_list = [1, 2, 3, 4, 5, 6, 7, 8]  # Список электролизеров для анализа
 
     # Загрузка данных из CSV файла
-    df = pd.read_csv('../FCA_LAB/result_19_01-20_11.csv', parse_dates=[date_name])
+    df = pd.read_csv('../result_SAZ25.csv', parse_dates=[date_name])
 
     # Предобработка данных
-    add_df = df['violation']  # Временное сохранение столбца violation
-    df = df.drop(['violation','anod'], axis=1)  # Удаление лишних столбцов
+    # add_df = df[defect_name]  # Временное сохранение столбца violation
+    df = df.drop(['№ анода','возраст на момент обнаружения', 'ROOM_ID', 'SHOP_ID', 'Вид  нарушения_наименование'], axis=1)  # Удаление лишних столбцов
 
     # Разделение на обучающую и тестовую выборки
-    train_df = df[(df[date_name] < dif_date)&(df[obj_name].isin(el_list))]
-    test_df = df[(df[date_name] >= dif_date)&(df[obj_name].isin(el_list))]
+    train_df = df[(df[date_name] > '2024-10-01')&(df[date_name] < dif_date)&(df[obj_name].isin(el_list))]
+    test_df = df[(df[date_name] < '2025-01-30')&(df[date_name] >= dif_date)&(df[obj_name].isin(el_list))]
 
     print('Выполнено')
 
