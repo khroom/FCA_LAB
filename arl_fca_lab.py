@@ -247,7 +247,7 @@ class arl_fca_lab:
                 if isinstance(rule_set, Set):
                     # Проверяем, что все атрибуты правила (кроме целевого) есть в строке
                     if rule_set.difference(row_set) == {'1_day_before'}:
-                        return self.confidence_df[obj_num].loc[row_index, 'confidence'], row_index
+                        return self.confidence_df[obj_num].loc[row_index, 'confidence'], rule_set
         return None
 
 def get_row(df: pd.DataFrame, num: int = 0):
@@ -371,20 +371,20 @@ if __name__ == '__main__':
             obj_num = 'all'  # Общая модель
             
         # Получение прогноза
-        rule_index = model.get_prediction(get_row(test_matrix, i), obj_num)
+        prediction = model.get_prediction(get_row(test_matrix, i), obj_num)
         
         # Сохранение результатов
         test_results.loc[i, 'Object'] = test_matrix.loc[i, obj_name]
         test_results.loc[i, 'Fact'] = test_matrix.loc[i, '1_day_before']
 
-        if rule_index == None:
+        if prediction == None:
             # Если правило не найдено
             test_results.loc[i, 'Prediction'] = 0
             test_results.loc[i, 'Rule'] = -1
         else:
             # Если правило найдено
-            test_results.loc[i, 'Prediction'] = model.confidence_df[obj_num].loc[rule_index, 'confidence']
-            test_results.loc[i, 'Rule'] = rule_index
+            test_results.loc[i, 'Prediction'] = prediction[0]
+            test_results.loc[i, 'Rule'] = prediction[1]
             
         # Вывод информации о текущем прогнозе
         print('Index:', i, ', Object:', test_results.loc[i, 'Object'], 
