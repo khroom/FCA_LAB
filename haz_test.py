@@ -46,16 +46,16 @@ if __name__ == '__main__':
             obj_num = test_matrix.loc[i, arl_data.Data.cell_name]
         else:
             obj_num = 'all'
-        rule_index = model.get_prediction(arl_fca_lab.get_row(test_matrix, i), obj_num)
+        prediction = model.get_prediction(arl_fca_lab.get_row(test_matrix, i), obj_num)
         test_results.loc[i, 'Object'] = test_matrix.loc[i, arl_data.Data.cell_name]
         test_results.loc[i, 'Fact'] = test_matrix.loc[i, '1_day_before']
 
-        if rule_index == None:
+        if prediction == None:
             test_results.loc[i, 'Prediction'] = 0
             test_results.loc[i, 'Rule'] = -1
         else:
-            test_results.loc[i, 'Prediction'] = model.confidence_df[obj_num].loc[rule_index[1], 'confidence']
-            test_results.loc[i, 'Rule'] = rule_index[0]
+            test_results.loc[i, 'Prediction'] = prediction[0]
+            test_results.loc[i, 'Rule'] = prediction[1]
             # model.confidence_df[obj_num].loc[rule_index, 'B']
         # print('Index:', i, ', Object:', test_results.loc[i, 'Object'], ', Predict:', test_results.loc[i, 'Prediction'],
         #       ', Fact:', test_results.loc[i, 'Fact'])
