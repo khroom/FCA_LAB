@@ -24,7 +24,7 @@ class arl_fca_lab:
     """
     
     def __init__(self, bin_type: arl_binarization.BinarizationType = arl_binarization.BinarizationType.HISTOGRAMS,
-                 ind_type: bool = True, keep_nan=True, days_before_defect=1):
+                 ind_type: bool = True, keep_nan=True, days_before_defect=3):
         """
         Инициализация объекта анализатора.
         
@@ -98,12 +98,12 @@ class arl_fca_lab:
             if not(obj == 'all'):
                 # Для индивидуальной модели фильтруем по конкретному электролизеру
                 pdf = self.bin_matrix.binary[
-                    (self.bin_matrix.binary['1_day_before'] == 1) & 
+                    (self.bin_matrix.binary['defect_markup'] == 1) & 
                     (self.bin_matrix.binary[obj_column] == obj)].drop(
                     [obj_column, parse_date], axis='columns')
             else:
                 # Для общей модели берем все данные
-                pdf = self.bin_matrix.binary[(self.bin_matrix.binary['1_day_before'] == 1)].drop(
+                pdf = self.bin_matrix.binary[(self.bin_matrix.binary['defect_markup'] == 1)].drop(
                     [obj_column, parse_date], axis='columns')
             
             # Инициализация решетки формальных понятий
@@ -153,10 +153,10 @@ class arl_fca_lab:
         # Оценка каждого концепта
         for i in range(len(lat.concepts)):
             # Пропускаем пустые концепты
-            if (lat.concepts[i]['B'].difference({'1_day_before'}) != set()) and (lat.concepts[i]['A'] != set()):
+            if (lat.concepts[i]['B'].difference({'defect_markup'}) != set()) and (lat.concepts[i]['A'] != set()):
                 # Вычисляем мощность левой части правила (без целевого параметра)
                 left_extent = len(
-                    set.intersection(*[df_derivation[j] for j in lat.concepts[i]['B'].difference({'1_day_before'})])
+                    set.intersection(*[df_derivation[j] for j in lat.concepts[i]['B'].difference({'defect_markup'})])
                 )
                 
                 # Вычисляем мощность всего правила (с целевым параметром)
@@ -246,7 +246,7 @@ class arl_fca_lab:
                 rule_set = self.confidence_df[obj_num].loc[row_index, "B"]
                 if isinstance(rule_set, Set):
                     # Проверяем, что все атрибуты правила (кроме целевого) есть в строке
-                    if rule_set.difference(row_set) == {'1_day_before'}:
+                    if rule_set.difference(row_set) == {'defect_markup'}:
                         return self.confidence_df[obj_num].loc[row_index, 'confidence'], rule_set
         return None
 

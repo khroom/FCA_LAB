@@ -30,7 +30,7 @@ class ArlBinaryMatrix:
 
     def create_model(self, df: pd.DataFrame, obj_column: str, parse_date: str, 
                    bin_type: BinarizationType, defect=None, ind_type: bool = True, 
-                   days_before_defect=1):
+                   days_before_defect=3):
         """
         Создает модель бинаризации параметров электролизеров.
         Метод анализирует исходные данные и определяет границы интервалов для каждого параметра
@@ -51,7 +51,7 @@ class ArlBinaryMatrix:
         ind_type : bool, default=True
             True - индивидуальная бинаризация для каждого электролизера
             False - общая бинаризация для всех электролизеров
-        days_before_defect : int, default=1
+        days_before_defect : int, default=3
             Количество дней до дефекта для разметки тестовых данных
             
         """
@@ -59,6 +59,7 @@ class ArlBinaryMatrix:
         self.__obj_column = obj_column  # Приватный атрибут с именем столбца электролизера
         self.bin_type = bin_type  # Тип бинаризации
         self.ind_type = ind_type  # Тип индивидуальности (по электролизерам)
+        self.__date_column = parse_date # Приватный атрибут с датой измерения
         
         # Проверяем и корректируем индекс DataFrame
         if [obj_column, parse_date] == df.index.names:
@@ -93,11 +94,12 @@ class ArlBinaryMatrix:
         # Бинаризация методом квартилей
         elif bin_type == BinarizationType.QUARTILES:
             if ind_type:
-                stats = pd.DataFrame()
-                # Для каждого электролизера вычисляем описательную статистику
-                for group, data in data_params.groupby(obj_column):
-                    stats = stats.append(pd.concat([data.describe()], keys=[group], names=[obj_column]))
-                stats = stats.unstack()
+                # stats = pd.DataFrame()
+                # # Для каждого электролизера вычисляем описательную статистику
+                # for group, data in data_params.groupby(obj_column):
+                #     stats = stats.append(pd.concat([data.describe()], keys=[group], names=[obj_column]))
+                # stats = stats.unstack()
+                stats = data_params.groupby(obj_column).describe()
             else:
                 # Общие статистика для всех данных
                 stats = data_params.describe()
@@ -183,7 +185,7 @@ class ArlBinaryMatrix:
             raise Exception("No binary model")
 
     def transform(self, df: pd.DataFrame, defect, obj_column: str, parse_date: str, 
-                keep_nan=True, days_before_defect=1, anomalies_only=False):
+                keep_nan=True, days_before_defect=3, anomalies_only=False):
         """
         Преобразует данные в бинарную матрицу на основе созданной модели.
         
@@ -199,7 +201,7 @@ class ArlBinaryMatrix:
             Название столбца с датами
         keep_nan : bool, default=True
             Сохранять ли столбцы для NaN значений
-        days_before_defect : int, default=1
+        days_before_defect : int, default=3
             Количество дней до дефекта для добавления соответствующего столбца (разметка данных для тестирования)
         anomalies_only : bool, default=False
             Возвращать только аномальные значения
@@ -653,45 +655,45 @@ class ArlBinaryMatrix:
         
         # Для каждого параметра определяем интервалы
         for c in df.columns.get_level_values(0).unique():
-            df_column = df[c]
+            dfc = df[c].dropna(axis=1, how='all')
             
             # Обрабатываем каждый электролизер отдельно (для индивидуальной модели)
-            for group, data in df_column.groupby(self.__obj_column):
-                dfc = data.dropna(axis=1, how='all')
-                i = 0
+            # for group, data in df_column.groupby(self.__obj_column):
+                # dfc = data.dropna(axis=1, how='all')
+            i = 0
+            
+            # Если есть хотя бы 2 интервала
+            if len(dfc.columns) > 1:
+                # Обрабатываем первый интервал
+                if (i, 'defect') in dfc.columns:
+                    classified.loc[dfc[dfc['value'] <= dfc[(i, 'defect')]].index, c] = i
+                if (i, 'clean') in dfc.columns:
+                    classified.loc[dfc[dfc['value'] <= dfc[(i, 'clean')]].index, c] = i
+                    
+                i += 1
                 
-                # Если есть хотя бы 2 интервала
-                if len(dfc.columns) > 1:
-                    # Обрабатываем первый интервал
+                # Обрабатываем промежуточные интервалы
+                while i <= dfc.columns[-1][0]:
                     if (i, 'defect') in dfc.columns:
-                        classified.loc[dfc[dfc['value'] <= dfc[(i, 'defect')]].index, c] = i
+                        classified.loc[
+                            (dfc['value'] > dfc[(i-1, 'clean')]) & 
+                            (dfc['value'] <= dfc[(i, 'defect')]), 
+                            c
+                        ] = i
                     if (i, 'clean') in dfc.columns:
-                        classified.loc[dfc[dfc['value'] <= dfc[(i, 'clean')]].index, c] = i
-                        
+                        classified.loc[
+                            (dfc['value'] > dfc[(i-1, 'defect')]) & 
+                            (dfc['value'] <= dfc[(i, 'clean')]), 
+                            c
+                        ] = i
                     i += 1
                     
-                    # Обрабатываем промежуточные интервалы
-                    while i <= dfc.columns[-1][0]:
-                        if (i, 'defect') in dfc.columns:
-                            classified.loc[
-                                (dfc['value'] > dfc[(i-1, 'clean')]) & 
-                                (dfc['value'] <= dfc[(i, 'defect')]), 
-                                c
-                            ] = i
-                        if (i, 'clean') in dfc.columns:
-                            classified.loc[
-                                (dfc['value'] > dfc[(i-1, 'defect')]) & 
-                                (dfc['value'] <= dfc[(i, 'clean')]), 
-                                c
-                            ] = i
-                        i += 1
-                        
-                    # Обрабатываем последний интервал
-                    if (i-1, 'clean') in dfc.columns:
-                        classified.loc[dfc[dfc['value'] > dfc[(i-1, 'clean')]].index, c] = i
-                    if (i-1, 'defect') in dfc.columns:
-                        classified.loc[dfc[dfc['value'] > dfc[(i-1, 'defect')]].index, c] = i
-                        
+                # Обрабатываем последний интервал
+                if (i-1, 'clean') in dfc.columns:
+                    classified.loc[dfc[dfc['value'] > dfc[(i-1, 'clean')]].index, c] = i
+                if (i-1, 'defect') in dfc.columns:
+                    classified.loc[dfc[dfc['value'] > dfc[(i-1, 'defect')]].index, c] = i
+                    
         return classified
 
     def __get_binary(self, df: pd.DataFrame):
@@ -744,24 +746,29 @@ class ArlBinaryMatrix:
         pd.DataFrame
             Отформатированная бинарная матрица с целевыми переменными
         """
-        # Создаем бинарные столбцы для дефектов
-        bin_events = pd.DataFrame(index=data_events.index)
-        for c in data_events.columns:
-            bin_events.loc[data_events[c] > 0, c] = 1
-            
-        # Объединяем с основной матрицей
-        binary = binary.join(bin_events)
         
-        # Добавляем столбец дня до дефекта
+        # Добавляем столбцы для разметки дней, которые считаем днями с дефектами
+        # Для конуса - это несколько дней непосредственно до дня обнаружения
         if days_before_defect > 0:
-            days_before = []
-            for index, row in data_events[data_events > 0].dropna(how='all').iterrows():
-                d = index[1] - datetime.timedelta(days=days_before_defect)
-                if (index[0], d) in data_events.index:
-                    days_before.append((index[0], d))
-                    
-            binary.loc[days_before, str(days_before_defect) + '_day_before'] = 1
-            
+            detections = data_events[data_events > 0].dropna(how='all').index.to_frame()
+
+            def get_markup_dates(detect_date):
+                return pd.date_range(end=detect_date, inclusive='left', periods=days_before_defect + 1, freq='d').to_list()
+
+            markup = pd.DataFrame(detections[self.__date_column].apply(get_markup_dates).to_list(), index=detections.index.get_level_values(0))
+            markup = markup.stack()
+            markup = markup.droplevel(1)
+            markup = markup.to_frame()
+            markup = markup.set_index(markup.columns.to_list()[0], append=True)
+
+            present_indexes = binary.index.isin(markup.index)
+           
+            binary.loc[present_indexes.tolist(), 'defect_markup'] = 1
+
+            # дни обаружения дефектов удаляем
+            detection_day_indexes = binary.index.isin(detections.index)
+            binary = binary.drop(binary.loc[detection_day_indexes.tolist()].index)
+
         # Заполняем пропуски нулями и сбрасываем индекс
         formatted_binary = binary.fillna(0).astype('int64').reset_index()
         return formatted_binary
