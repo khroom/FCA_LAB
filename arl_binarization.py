@@ -28,9 +28,8 @@ class ArlBinaryMatrix:
     - определять границы интервалов
     """
 
-    def create_model(self, df: pd.DataFrame, obj_column: str, parse_date: str, 
-                   bin_type: BinarizationType, defect=None, ind_type: bool = True, 
-                   days_before_defect=3):
+    def create_model(self, df: pd.DataFrame, obj_column: str, parse_date: str, settings,
+                     defect=None, days_before_defect=3):
         """
         Создает модель бинаризации параметров электролизеров.
         Метод анализирует исходные данные и определяет границы интервалов для каждого параметра
@@ -57,8 +56,6 @@ class ArlBinaryMatrix:
         """
         # Сохраняем параметры в атрибуты класса
         self.__obj_column = obj_column  # Приватный атрибут с именем столбца электролизера
-        self.bin_type = bin_type  # Тип бинаризации
-        self.ind_type = ind_type  # Тип индивидуальности (по электролизерам)
         self.__date_column = parse_date # Приватный атрибут с датой измерения
         
         # Проверяем и корректируем индекс DataFrame
@@ -69,66 +66,83 @@ class ArlBinaryMatrix:
             # Если индекс нужно перестроить
             data_params = df.reset_index()
             if (obj_column in data_params.columns) & (parse_date in data_params.columns):
-                data_params = data_params.set_index([obj_column, parse_date])
+                data_params = data_params.set_index(pd.MultiIndex([obj_column, parse_date], names=[obj_column, parse_date]))
                 
         # Обрабатываем параметр defect (может быть строкой или списком)
         if not isinstance(defect, list):
             defect = [defect]
             
+        data_params = self.__markup_defects(data_params, df[defect], days_before_defect)
         # Разделяем данные на параметры и события дефектов
-        data_events = df[defect]
+        data_events = data_params['defect_markup']
         data_params = df.drop(defect, axis=1)
 
-        # Бинаризация методом стандартного отклонения
-        if bin_type == BinarizationType.STDDEV:
-            if ind_type:
-                # Индивидуальная статистика по каждому электролизеру
-                stats = data_params.groupby(obj_column).agg([np.min, np.mean, np.std, np.max])
-            else:
-                # Общая статистика для всех электролизеров
-                stats = data_params.agg([np.min, np.mean, np.std, np.max])
-                stats = pd.concat([stats], keys=['0'], names=['all']).unstack()
-            # Получаем границы интервалов
-            self.boundaries = self.__get_boundaries_by_stat(stats)
-
-        # Бинаризация методом квартилей
-        elif bin_type == BinarizationType.QUARTILES:
-            if ind_type:
-                # stats = pd.DataFrame()
-                # # Для каждого электролизера вычисляем описательную статистику
-                # for group, data in data_params.groupby(obj_column):
-                #     stats = stats.append(pd.concat([data.describe()], keys=[group], names=[obj_column]))
-                # stats = stats.unstack()
-                stats = data_params.groupby(obj_column).describe()
-            else:
-                # Общие статистика для всех данных
-                stats = data_params.describe()
-                stats = pd.concat([stats], keys=['0'], names=['all']).unstack()
-            self.boundaries = self.__get_boundaries_by_quartiles(stats)
-
-        # Бинаризация методом гистограмм
-        elif bin_type == BinarizationType.HISTOGRAMS:
-            if ind_type:
-                self.boundaries = pd.DataFrame()
-                # Обрабатываем каждый электролизер отдельно
-                for group, data in data_params.groupby(obj_column):
-                    hist_boundaries = self.__get_boundaries_by_hist(
-                        data, 
-                        data_events.loc[data.index], 
-                        day_before=days_before_defect
-                    )
-                    self.boundaries = self.boundaries.append(
-                        pd.concat([hist_boundaries], keys=[group], names=[obj_column])
-                    )
-                self.boundaries.index = self.boundaries.index.droplevel(1)
-            else:
-                # Обрабатываем все данные вместе
-                self.boundaries = self.__get_boundaries_by_hist(
-                    data_params, 
-                    data_events, 
-                    day_before=days_before_defect
-                )
+        pot_ids = data_params.index.get_level_values('POT_ID').unique()
+        common_id = pd.Index(['all'])
+        #создаем фрейм с двухуровневым пустым индексом в колонках
+        self.boundaries = pd.DataFrame(index = pd.Index(pot_ids.append(common_id), name=self.__obj_column), columns=[[],[]])
         
+        for parameter in data_params.columns:
+
+            if parameter in settings:
+            # Бинаризация методом стандартного отклонения
+                if settings[parameter]['binarization'] == BinarizationType.STDDEV:
+                    if settings[parameter]['individual']:
+                        # Индивидуальная статистика по каждому электролизеру
+                        stats = data_params[parameter].groupby(obj_column).agg([np.min, np.mean, np.std, np.max])
+                        stats.columns = pd.MultiIndex.from_product([ [parameter],stats.columns.values])
+                    else:
+                        # Общая статистика для всех электролизеров
+                        stats = data_params[parameter].agg([np.min, np.mean, np.std, np.max])
+                        stats.index = pd.MultiIndex.from_product([ [parameter],stats.index.values])
+                        stats = stats.to_frame().T
+                        stats.index = ['all']
+                    # Получаем границы интервалов
+                    parameter_boundaries = self.__get_boundaries_by_stat(stats)
+                    self.boundaries = self.boundaries.join(parameter_boundaries)
+
+                # Бинаризация методом квартилей
+                elif settings[parameter]['binarization'] == BinarizationType.QUARTILES:
+                    if settings[parameter]['individual']:
+                        stats = data_params[parameter].groupby(obj_column).describe()
+                        stats.columns = pd.MultiIndex.from_product([ [parameter],stats.columns.values])
+                    else:
+                        # Общие статистика для всех данных
+                        stats = data_params[parameter].describe()
+                        stats.index = pd.MultiIndex.from_product([ [parameter],stats.index.values])
+                        stats = stats.to_frame().T
+                        stats.index = ['all']
+                    parameter_boundaries = self.__get_boundaries_by_quartiles(stats)
+                    self.boundaries = self.boundaries.join(parameter_boundaries)
+
+
+                # Бинаризация методом гистограмм
+                elif settings[parameter]['binarization'] == BinarizationType.HISTOGRAMS:
+                    # if settings[parameter]['individual']:
+                        # self.boundaries = pd.DataFrame()
+                        # # Обрабатываем каждый электролизер отдельно
+                        # for group, data in data_params.groupby(obj_column):
+                        #     hist_boundaries = self.__get_boundaries_by_hist(
+                        #         data, 
+                        #         parameter,
+                        #         data_events.loc[data.index], 
+                        #         day_before=days_before_defect
+                        #     )
+                        #     self.boundaries = self.boundaries.append(
+                        #         pd.concat([hist_boundaries], keys=[group], names=[obj_column])
+                        #     )
+                        # self.boundaries.index = self.boundaries.index.droplevel(1)
+                    # else:
+                        # Обрабатываем все данные вместе
+                    parameter_boundaries = self.__get_boundaries_by_hist(
+                        data_params,
+                        parameter, 
+                        data_events, 
+                      
+                    )
+                    if parameter_boundaries is not None:
+                        self.boundaries = self.boundaries.join(parameter_boundaries)
+            
         # Инициализируем бинарную матрицу
         self.binary = None
 
@@ -184,8 +198,8 @@ class ArlBinaryMatrix:
         else:
             raise Exception("No binary model")
 
-    def transform(self, df: pd.DataFrame, defect, obj_column: str, parse_date: str, 
-                keep_nan=True, days_before_defect=3, anomalies_only=False):
+    def transform(self, df: pd.DataFrame, defect, obj_column: str, parse_date: str, settings,
+                days_before_defect=3):
         """
         Преобразует данные в бинарную матрицу на основе созданной модели.
         
@@ -224,7 +238,7 @@ class ArlBinaryMatrix:
         else:
             data_params = df.reset_index()
             if (obj_column in data_params.columns) & (parse_date in data_params.columns):
-                data_params = data_params.set_index([obj_column, parse_date])
+                data_params = data_params.set_index(pd.MultiIndex([obj_column, parse_date], names=[obj_column, parse_date]))
                 
         # Обрабатываем параметр defect (может быть строкой или списком)
         if not isinstance(defect, list):
@@ -242,62 +256,31 @@ class ArlBinaryMatrix:
         # Объединяем данные с границами интервалов
         full_df = self.__concat_data_boundaries(
             data_params[cross_cols], 
-            self.boundaries[cross_cols]
+            self.boundaries[cross_cols],
+            settings
         )
-
+        odd_columns = full_df.columns
+        binary = pd.DataFrame(index = full_df.index)
         # Обработка в зависимости от типа бинаризации
-        if self.bin_type == BinarizationType.STDDEV:
-            # Классификация по стандартному отклонению
-            classified_data = self.__classify_by_std(full_df)
-            binary = self.__get_binary(classified_data)
-            
-            if anomalies_only:
-                # Удаляем "нормальные" значения (центральный интервал)
-                normal = [c for c in binary.columns if c[-2:] == '_1']
-                binary = binary.drop(normal, axis='columns')
-                
-            if not keep_nan:
-                # Удаляем столбцы с NaN
-                binary = self.__drop_nan(binary)
+        for parameter in settings:
+            if settings[parameter]['binarization'] == BinarizationType.STDDEV:
+                self.__classify_by_std(full_df, parameter, settings[parameter]['anomalies_only'], settings[parameter]['keep_nan'])
+                # binary = binary.join(classified_data, how='left')
 
-        elif self.bin_type == BinarizationType.QUARTILES:
-            # Классификация по квартилям
-            classified_data = self.__classify_by_quartiles(full_df)
-            binary = self.__get_binary(classified_data)
-            
-            if anomalies_only:
-                # Удаляем "нормальные" значения (центральные интервалы)
-                normal = [c for c in binary.columns if (c[-2:] == '_1') | (c[-2:] == '_2')]
-                binary = binary.drop(normal, axis='columns')
-                
-            if not keep_nan:
-                binary = self.__drop_nan(binary)
+            elif settings[parameter]['binarization'] == BinarizationType.QUARTILES:
+                self.__classify_by_quartiles(full_df, parameter, settings[parameter]['anomalies_only'], settings[parameter]['keep_nan'])
+                # binary = binary.join(classified_data,how='left')
 
-        elif self.bin_type == BinarizationType.HISTOGRAMS:
-            # Классификация по гистограммам
-            classified_data = self.__classify_by_hist(full_df)
-            binary = self.__get_binary(classified_data)
-            
-            if anomalies_only & (len(self.boundaries) == 1):
-                # Удаляем "нормальные" значения для общей модели
-                normal = set()
-                for p in self.boundaries.columns.get_level_values(0).unique():
-                    for c in self.boundaries[p].columns:
-                        if c[1] == 'clean':
-                            col = p + '_' + str(c[0])
-                            if col in binary.columns:
-                                normal.add(col)
-                        if c[1] == 'defect':
-                            col = p + '_' + str(c[0]+1)
-                            if col in binary.columns:
-                                normal.add(col)
-                binary = binary.drop(list(normal), axis='columns')
+            elif settings[parameter]['binarization'] == BinarizationType.HISTOGRAMS:
+                self.__classify_by_hist(full_df, parameter, settings[parameter]['anomalies_only'], settings[parameter]['keep_nan'])
+                # binary = binary.join(classified_data,how='left')
                 
-            if not keep_nan:
-                binary = self.__drop_nan(binary)
-
+        binary = full_df.drop(columns=odd_columns)
+        binary = binary.droplevel(level=1, axis=1)
         # Форматируем бинарную матрицу и сохраняем в атрибут
-        self.binary = self.__format_binary(binary, data_events, days_before_defect)
+        binary = self.__markup_defects(binary, data_events, days_before_defect)
+        self.binary = self.__format_binary(binary)
+        
         return self.binary
 
     def __drop_nan(self, df: pd.DataFrame):
@@ -375,19 +358,17 @@ class ArlBinaryMatrix:
         boundaries.columns = pd.MultiIndex.from_tuples(boundaries.columns)
         return boundaries
 
-    def __get_boundaries_by_hist(self, df: pd.DataFrame, data_events: pd.DataFrame, 
-                               day_before=1, interval_width=5, thres=0.1):
+    def __get_boundaries_by_hist(self, df: pd.Series, parameter, data_events: pd.DataFrame, 
+                               interval_width=5, thres=0.1):
         """
         Внутренний метод для расчета границ по пересечению гистограмм.
         
         Параметры:
         ----------
-        df : pd.DataFrame
+        df : pd.Series
             Данные параметров
         data_events : pd.DataFrame
             Данные о дефектах
-        day_before : int, default=1
-            Количество дней до дефекта для анализа
         interval_width : int, default=5
             Ширина окна для скользящего среднего
         thres : float, default=0.1
@@ -398,96 +379,87 @@ class ArlBinaryMatrix:
         pd.DataFrame
             Границы интервалов для каждого параметра
         """
-        # Определяем периоды с дефектами
-        defect_period = []
-        for index, value in data_events[data_events > 0].dropna(how='all').iterrows():
-            # Для каждого дефекта берем 3 дня до указанного дня (day_before)
-            period_dates = pd.date_range(
-                end=index[1] - datetime.timedelta(days=day_before), 
-                periods=3
-            )
-            for d in period_dates:
-                if (index[0], d) in df.index:
-                    defect_period.append((index[0], d))
                     
         # Разделяем данные на "чистые" и "с дефектами"
-        defect_frame = df.loc[defect_period]
-        clean_frame = df.drop(defect_period)
+        defect_series = df.loc[data_events[data_events.notna()].index, parameter]
+        clean_series = df.loc[df['defect_markup'].isna(), parameter]
         
-        boundaries = pd.DataFrame(index=['0'])
+        boundaries = pd.DataFrame(index=['all'])
         
         # Обрабатываем каждый параметр отдельно
-        for c in df.columns:
-            if df[c].count() == 0:
-                continue
+        # for c in df.columns:
+            # if df[c].count() == 0:
+            #     continue
                 
-            # Вычисляем оптимальную ширину интервала для гистограммы
-            # по формуле Скотта: 3.5 * σ / n^(1/3)
-            step = 3.5 * df[c].std() / math.pow(df[c].count(), 1 / 3)
-            bins = []
-            clean_hist = []
-            defect_hist = []
-            cur_value = df[c].min()
+        # Вычисляем оптимальную ширину интервала для гистограммы
+        # по формуле Скотта: 3.5 * σ / n^(1/3)
+        step = 3.5 * df[parameter].std() / math.pow(df[parameter].count(), 1 / 3)
+        bins = []
+        clean_hist = []
+        defect_hist = []
+        cur_value = df[parameter].min()
+        
+        # Строим гистограммы для "чистых" и "дефектных" данных
+        while cur_value < df[parameter].max() + step:
+            # Подсчет относительной частоты в текущем интервале
+            clean_count = clean_series.loc[
+                (clean_series >= cur_value) & 
+                (clean_series < cur_value + step)
+            ].count() / clean_series.count()
             
-            # Строим гистограммы для "чистых" и "дефектных" данных
-            while cur_value < df[c].max() + step:
-                # Подсчет относительной частоты в текущем интервале
-                clean_count = clean_frame.loc[
-                    (clean_frame[c] >= cur_value) & 
-                    (clean_frame[c] < cur_value + step)
-                ][c].count() / clean_frame[c].count()
-                
-                defect_count = defect_frame.loc[
-                    (defect_frame[c] >= cur_value) & 
-                    (defect_frame[c] < cur_value + step)
-                ][c].count() / defect_frame[c].count()
-                
-                # Добавляем только значимые интервалы
-                if (clean_count > 0) | (defect_count > 0):
-                    bins.append(cur_value)
-                    clean_hist.append(clean_count)
-                    defect_hist.append(defect_count)
-                    
-                cur_value += step
-                
-            # Создаем DataFrame с гистограммами
-            hist = pd.DataFrame({'clean': clean_hist, 'defect': defect_hist}, index=bins)
+            defect_count = defect_series.loc[
+                (defect_series >= cur_value) & 
+                (defect_series < cur_value + step)
+            ].count() / defect_series.count()
             
-            # Определяем минимально значимую разницу
-            delta = hist.max().max() * thres
-            leading = ''  # Текущая доминирующая группа
-            i = 0  # Счетчик интервалов
+            # Добавляем только значимые интервалы
+            if (clean_count > 0) | (defect_count > 0):
+                bins.append(cur_value)
+                clean_hist.append(clean_count)
+                defect_hist.append(defect_count)
+                
+            cur_value += step
             
-            # Анализируем гистограммы для определения границ
-            for index, row in hist.iloc[1:].iterrows():
-                # Проверяем, есть ли значимые различия в текущем интервале
-                if (row['clean'] >= delta) | (row['defect'] >= delta):
-                    # Вычисляем разницу с использованием скользящего среднего
-                    change = (
-                        (hist['clean'] - hist['defect'])
-                        .loc[:index]
-                        .tail(interval_width)
-                        .rolling(interval_width)
-                        .mean()
-                    ).loc[index]
-                    
-                    # Определяем доминирующую группу
-                    group = 'defect' if change < 0 else 'clean'
-                    
-                    # Если доминирующая группа изменилась - фиксируем границу
-                    if group != leading:
-                        if leading == '':
-                            # Первая граница
-                            leading = group
-                        else:
-                            # Добавляем границу интервала
-                            boundaries[(c, (i, leading))] = index
-                            leading = group
-                            i += 1
-                            
-        boundaries.columns = pd.MultiIndex.from_tuples(boundaries.columns)
-        boundaries.index.name = 'all'
-        return boundaries
+        # Создаем DataFrame с гистограммами
+        hist = pd.DataFrame({'clean': clean_hist, 'defect': defect_hist}, index=bins)
+        
+        # Определяем минимально значимую разницу
+        delta = hist.max().max() * thres
+        leading = ''  # Текущая доминирующая группа
+        i = 0  # Счетчик интервалов
+        
+        # Анализируем гистограммы для определения границ
+        for index, row in hist.iloc[1:].iterrows():
+            # Проверяем, есть ли значимые различия в текущем интервале
+            if (row['clean'] >= delta) | (row['defect'] >= delta):
+                # Вычисляем разницу с использованием скользящего среднего
+                change = (
+                    (hist['clean'] - hist['defect'])
+                    .loc[:index]
+                    .tail(interval_width)
+                    .rolling(interval_width)
+                    .mean()
+                ).loc[index]
+                
+                # Определяем доминирующую группу
+                group = 'defect' if change < 0 else 'clean'
+                
+                # Если доминирующая группа изменилась - фиксируем границу
+                if group != leading:
+                    if leading == '':
+                        # Первая граница
+                        leading = group
+                    else:
+                        # Добавляем границу интервала
+                        boundaries[(parameter, (i, leading))] = index
+                        leading = group
+                        i += 1
+
+        if not boundaries.empty:                
+            boundaries.columns = pd.MultiIndex.from_tuples(boundaries.columns)
+            return boundaries
+        else:
+            print(parameter + '   не найдено разделение')
 
     def decode(self):
         """
@@ -542,7 +514,7 @@ class ArlBinaryMatrix:
         t.index = t.index.droplevel(1)
         return t
 
-    def __concat_data_boundaries(self, data: pd.DataFrame, boundaries: pd.DataFrame):
+    def __concat_data_boundaries(self, data: pd.DataFrame, boundaries: pd.DataFrame, settings):
         """
         Внутренний метод для объединения данных с границами интервалов.
         
@@ -558,22 +530,27 @@ class ArlBinaryMatrix:
         pd.DataFrame
             Объединенные данные с мультииндексом
         """
-        # Подготавливаем данные с мультииндексом столбцов
+        # Подготавливаем данные с мультииндексом столбцов и строк
         df = pd.concat([data], axis='columns', keys=['value'])
         df.columns = df.columns.swaplevel(0, 1)
-        
-        # Объединяем с границами в зависимости от типа модели
-        if boundaries.index.name == self.__obj_column:
-            # Для индивидуальной модели
-            return df.join(boundaries)
-        else:
-            # Для общей модели
-            df = pd.concat([df], keys=['0'], names=['all'])
-            df = df.join(boundaries)
-            df.index = df.index.droplevel(0)
-            return df
 
-    def __classify_by_std(self, df: pd.DataFrame):
+        df = pd.concat([df], keys=['all'], names=['all'])
+        
+        for parameter in data.columns:
+            if parameter in settings:
+                # Объединяем с границами в зависимости от типа модели
+                if settings[parameter]['individual']:
+                    # Для индивидуальной модели
+                    df = df.join(boundaries[[parameter]], on=self.__obj_column, how='inner')
+                else:
+                    # Для общей модели
+                    df = df.join(boundaries[[parameter]], on='all', how='inner')
+                    
+        df.index = df.index.droplevel(0)
+        return df
+
+
+    def __classify_by_std(self, df: pd.DataFrame, parameter, anomalies_only, keep_nan):
         """
         Внутренний метод классификации по стандартному отклонению.
         
@@ -587,20 +564,25 @@ class ArlBinaryMatrix:
         pd.DataFrame
             Классифицированные данные (номера интервалов)
         """
-        classified = pd.DataFrame(index=df.index)
-        
+        # classified = pd.DataFrame(index=df.index)
+         
         # Для каждого параметра определяем интервалы
-        for c in df.columns.get_level_values(0).unique():
+        for c in df[[parameter]].columns.get_level_values(0).unique():
             # Интервал 0: значения ниже (mean - std)
-            classified.loc[df[(c, 'value')] < df[(c, 1)], c] = 0
-            # Интервал 1: значения между (mean - std) и (mean + std)
-            classified.loc[df[(c, 'value')].between(df[(c, 1)], df[(c, 2)]), c] = 1
+            df.loc[df[(c, 'value')] < df[(c, 1)], c + '_0'] = 1
             # Интервал 2: значения выше (mean + std)
-            classified.loc[df[(c, 'value')] > df[(c, 2)], c] = 2
+            df.loc[df[(c, 'value')] > df[(c, 2)], c + '_2'] = 1
             
-        return classified
+            if not anomalies_only:
+                # Интервал 1: значения между (mean - std) и (mean + std)
+                df.loc[df[(c, 'value')].between(df[(c, 1)], df[(c, 2)]), c + '_1'] = 1
+                    
+            if keep_nan:
+                df.loc[df[(c, 'value')].isna(), c + '_NaN'] = 1
 
-    def __classify_by_quartiles(self, df: pd.DataFrame):
+        
+
+    def __classify_by_quartiles(self, df: pd.DataFrame, parameter, anomalies_only, keep_nan):
         """
         Внутренний метод классификации по квартилям.
         
@@ -614,30 +596,34 @@ class ArlBinaryMatrix:
         pd.DataFrame
             Классифицированные данные (номера интервалов)
         """
-        classified = pd.DataFrame(index=df.index)
+        # classified = pd.DataFrame(index=df.index)
         
         # Для каждого параметра определяем интервалы
-        for c in df.columns.get_level_values(0).unique():
+        for c in df[[parameter]].columns.get_level_values(0).unique():
             # Интервал 0: значения ≤ Q1
-            classified.loc[df[(c, 'value')] <= df[(c, 1)], c] = 0
-            # Интервал 1: значения между Q1 и медианой
-            classified.loc[
-                (df[(c, 'value')] > df[(c, 1)]) & 
-                (df[(c, 'value')] <= df[(c, 2)]), 
-                c
-            ] = 1
-            # Интервал 2: значения между медианой и Q3
-            classified.loc[
-                (df[(c, 'value')] > df[(c, 2)]) & 
-                (df[(c, 'value')] <= df[(c, 3)]), 
-                c
-            ] = 2
+            df.loc[df[(c, 'value')] <= df[(c, 1)], c + '_0'] = 1
             # Интервал 3: значения > Q3
-            classified.loc[df[(c, 'value')] > df[(c, 3)], c] = 3
-            
-        return classified
+            df.loc[df[(c, 'value')] > df[(c, 3)], c + '_3'] = 1
+                        
+            if not anomalies_only:
+                # Интервал 1: значения между Q1 и медианой
+                df.loc[
+                    (df[(c, 'value')] > df[(c, 1)]) & 
+                    (df[(c, 'value')] <= df[(c, 2)]), 
+                    c + '_1'
+                ] = 1
+                # Интервал 2: значения между медианой и Q3
+                df.loc[
+                    (df[(c, 'value')] > df[(c, 2)]) & 
+                    (df[(c, 'value')] <= df[(c, 3)]), 
+                    c + '_2'
+                ] = 1
+                        
+            if keep_nan:
+                df.loc[df[(c, 'value')].isna(), c + '_NaN'] = 1
 
-    def __classify_by_hist(self, df: pd.DataFrame):
+        
+    def __classify_by_hist(self, df: pd.DataFrame, parameter, anomalies_only, keep_nan):
         """
         Внутренний метод классификации по гистограммам.
         
@@ -654,47 +640,31 @@ class ArlBinaryMatrix:
         classified = pd.DataFrame(index=df.index)
         
         # Для каждого параметра определяем интервалы
-        for c in df.columns.get_level_values(0).unique():
-            dfc = df[c].dropna(axis=1, how='all')
+        for c in df[[parameter]].columns.get_level_values(0).unique():
             
-            # Обрабатываем каждый электролизер отдельно (для индивидуальной модели)
-            # for group, data in df_column.groupby(self.__obj_column):
-                # dfc = data.dropna(axis=1, how='all')
-            i = 0
-            
-            # Если есть хотя бы 2 интервала
-            if len(dfc.columns) > 1:
-                # Обрабатываем первый интервал
-                if (i, 'defect') in dfc.columns:
-                    classified.loc[dfc[dfc['value'] <= dfc[(i, 'defect')]].index, c] = i
-                if (i, 'clean') in dfc.columns:
-                    classified.loc[dfc[dfc['value'] <= dfc[(i, 'clean')]].index, c] = i
+            dfc = df[c]
+            properties = {}
+
+            for i in dfc.columns:
+                if i != 'value':
+                    properties[i[0]] = i[1]
                     
-                i += 1
-                
-                # Обрабатываем промежуточные интервалы
-                while i <= dfc.columns[-1][0]:
-                    if (i, 'defect') in dfc.columns:
-                        classified.loc[
-                            (dfc['value'] > dfc[(i-1, 'clean')]) & 
-                            (dfc['value'] <= dfc[(i, 'defect')]), 
-                            c
-                        ] = i
-                    if (i, 'clean') in dfc.columns:
-                        classified.loc[
-                            (dfc['value'] > dfc[(i-1, 'defect')]) & 
-                            (dfc['value'] <= dfc[(i, 'clean')]), 
-                            c
-                        ] = i
-                    i += 1
-                    
-                # Обрабатываем последний интервал
-                if (i-1, 'clean') in dfc.columns:
-                    classified.loc[dfc[dfc['value'] > dfc[(i-1, 'clean')]].index, c] = i
-                if (i-1, 'defect') in dfc.columns:
-                    classified.loc[dfc[dfc['value'] > dfc[(i-1, 'defect')]].index, c] = i
-                    
-        return classified
+            dfc.columns = pd.Index([i if i == 'value' else i[0] for i in dfc.columns])
+
+            for i in dfc.columns:
+                if i != 'value':
+                    if (not anomalies_only) | (properties[i] == 'defect'):
+                        if i+1 in dfc.columns:
+                            df.loc[dfc['value'].between(dfc[i], dfc[i+1], inclusive='left'), c + '_' + str(i)] = 1
+                        else:
+                            df.loc[dfc['value'] > dfc[i], c + '_' + str(i)] = 1
+
+
+            if not keep_nan:
+                df.loc[dfc['value'].isna(), c + '_NaN'] = 1
+
+
+        # return classified
 
     def __get_binary(self, df: pd.DataFrame):
         """
@@ -726,9 +696,8 @@ class ArlBinaryMatrix:
             
         # Удаляем полностью пустые столбцы и заполняем пропуски нулями
         return binary.dropna(how='all', axis='columns').fillna(0)
-
-    def __format_binary(self, binary: pd.DataFrame, data_events: pd.DataFrame, 
-                      days_before_defect):
+    
+    def __format_binary(self, binary: pd.DataFrame):
         """
         Внутренний метод форматирования бинарной матрицы.
         
@@ -736,17 +705,19 @@ class ArlBinaryMatrix:
         ----------
         binary : pd.DataFrame
             Бинарная матрица параметров
-        data_events : pd.DataFrame
-            Данные о дефектах
-        days_before_defect : int
-            Количество дней до дефекта
-            
+                    
         Возвращает:
         -----------
         pd.DataFrame
-            Отформатированная бинарная матрица с целевыми переменными
+            Отформатированная бинарная матрица 
         """
-        
+
+        # Заполняем пропуски нулями и сбрасываем индекс
+        formatted_binary = binary.fillna(0).astype('int64').reset_index()
+        return formatted_binary
+    
+    def __markup_defects(self, binary: pd.DataFrame, data_events: pd.DataFrame, 
+                      days_before_defect):
         # Добавляем столбцы для разметки дней, которые считаем днями с дефектами
         # Для конуса - это несколько дней непосредственно до дня обнаружения
         if days_before_defect > 0:
@@ -768,10 +739,8 @@ class ArlBinaryMatrix:
             # дни обаружения дефектов удаляем
             detection_day_indexes = binary.index.isin(detections.index)
             binary = binary.drop(binary.loc[detection_day_indexes.tolist()].index)
-
-        # Заполняем пропуски нулями и сбрасываем индекс
-        formatted_binary = binary.fillna(0).astype('int64').reset_index()
-        return formatted_binary
+        
+        return binary
 
 
 if __name__ == '__main__':

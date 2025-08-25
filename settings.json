@@ -1,0 +1,434 @@
+{
+    "METAL_HEIGHT": {
+        "binarization": 2,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "RAIS_NUM": {
+        "binarization": 2,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "RAIS_TIME": {
+        "binarization": 2,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "LOWR_NUM": {
+        "binarization": 2,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "LOWR_TIME": {
+        "binarization": 2,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "AVG_CTRL_COEFF": {
+        "binarization": 2,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "FEED_AUTO_DUMPS": {
+        "binarization": 2,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "OVERFEED_TIME": {
+        "binarization": 2,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "UNDERFEED_TIME": {
+        "binarization": 2,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "FEED_DOZE_TROLL": {
+        "binarization": 2,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "AVG_RAW_VOLT": {
+        "binarization": 2,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "AVG_VOLT_SETP": {
+        "binarization": 2,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "AVG_VOLT_ADD": {
+        "binarization": 2,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "AVG_BACK_EMF": {
+        "binarization": 2,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "POT_AGE": {
+        "binarization": 2,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "METAL_HEIGHT_CALC": {
+        "binarization": 2,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "NUM_UNDERFEEDS": {
+        "binarization": 2,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "NUM_TESTS": {
+        "binarization": 2,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "TEMP_HEAT": {
+        "binarization": 2,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "BATH_HEIGHT": {
+        "binarization": 2,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "AVG_VOLT_BUS": {
+        "binarization": 2,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "CR": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "MGF2": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "CAF2": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "TEMPERATURE": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "AE_NUM": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "AE_DUR": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "AVG_AE_VOLT": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "CTRL_MAN_TIME": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "CTRL_LOCK_TIME": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "FEED_MAN_DUMPS": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "FEED_MAN_TIME": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "FEED_LOCK_TIME": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "AVG_FEED_SETP": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "TEST_TIME": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "OFF_TIME": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "NOMINAL_TIME": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "AVG_FLUOR_SETP": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "FLUOR_AUTO_DUMPS": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "AVG_NORM_VOLT": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "AVG_NOISE": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "HIGH_NOISE_TIME": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "CARBONDUST": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "WEIGHT_PLAN": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "TAP_RATIO": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "POT_CURR_EFF_LO": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "WEIGHT_POT_LO": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "STARVE_TIME": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "OVERFEED_DUMPS": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "UNDERFEED_DUMPS": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "TEST_DUMPS": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "NOMINAL_DUMPS": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "TAP_TIME": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "TEMP_LIC": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "TEMP_BATH": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "TEMPERATURE_GOAL": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "CR_GOAL": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "AVG_RAW_VOLT_GOAL": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "AVG_ADD_RESET": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "AVG_ADD_TEMP": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "AVG_ADD_NOISE": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "TAP_RESET_INT": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "RES_COVER_INT": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "MEAS_TAP_INT": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "AN_PULL_CNT": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "AVG_ADD_TEMPERATURE": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "AE_NUM_1": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "SI_CRUCE": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "FE_CRUCE": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "FLUOR_DOZE_TROLL": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "VOLT_POD": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    },
+    "NUM_OVERFEEDS": {
+        "binarization": 1,
+        "individual": false,
+        "anomalies_only": true,
+        "keep_nan": true
+    }
+}

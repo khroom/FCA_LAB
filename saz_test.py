@@ -8,9 +8,16 @@ import json
 import matplotlib.pyplot as plt
 
 from utils.plot_utils import save_plot, save_plot_data
+from  utils.test_utils import create_model_settings, dump_model_settings, load_model_settings
+
+# import warnings
+# warnings.filterwarnings('ignore')
 
 # Основной блок выполнения программы
 if __name__ == '__main__':
+
+    # settings = create_model_settings()
+    # dump_model_settings(settings, 'settings.json')
     print('Загрузка исходных данных')
 
     date_name = 'DATE_TRUNC'  # Название столбца с датами
@@ -48,107 +55,98 @@ if __name__ == '__main__':
     greens_count = 0
 
 
-
-
-    for anomalies_only_type in [True, False]:
-         
-         for keep_nan_type in [True, False]:
+    settings = load_model_settings('settings.json')
+    sample = settings.get('METAL_HEIGHT', {})
+    # Создание модели анализа формальных понятий с параметрами:
+    # - тип бинаризации: по стандартному отклонению (STDDEV)
+    # - индивидуальный тип: False (строится общая модель для всех электролизеров)
+    # - keep_nan: False (не сохранять пропущенные значения)
+    model = arl_fca_lab.arl_fca_lab(ind_type=sample.get('individual') ,days_before_defect=3)
     
-            for individual_type in [False, True]:
-                
-                for binary_type in [arl_binarization.BinarizationType.STDDEV, arl_binarization.BinarizationType.QUARTILES, arl_binarization.BinarizationType.HISTOGRAMS]:
+    # Обучение модели на обучающей выборке
+    model.fit_model(train_df, defect_name, obj_name, date_name, settings)
+
+    print('Выполнено')
+    print('Подготовка тестового датасета')
+
+    # Преобразование тестовых данных с использованием полученной модели бинаризации
+    test_matrix = model.bin_matrix.transform(
+        test_df, 
+        model.defect, 
+        obj_name, 
+        date_name,
+        settings,
+        model.days_before_defect
+    )
+    print('Выполнено')
+    print('Расчет оценок')
+
+    # Создание DataFrame для хранения результатов прогнозирования
+    test_results = pd.DataFrame(index=test_matrix.index, columns=['Object', 'Prediction', 'Fact', 'Rule'])
+
+    # Прогнозирование для каждой строки тестовых данных
+    for i in test_matrix.index:
+        if model.ind_type:
+            obj_num = test_matrix.loc[i, obj_name]  # Номер электролизера для индивидуальной модели
+        else:
+            obj_num = 'all'  # Общая модель
             
-                    if individual_type & (binary_type == arl_binarization.BinarizationType.HISTOGRAMS):
-                        continue
-                    # Создание модели анализа формальных понятий с параметрами:
-                    # - тип бинаризации: по стандартному отклонению (STDDEV)
-                    # - индивидуальный тип: False (строится общая модель для всех электролизеров)
-                    # - keep_nan: False (не сохранять пропущенные значения)
-                    model = arl_fca_lab.arl_fca_lab(bin_type=binary_type, ind_type=individual_type, keep_nan=keep_nan_type)
-                    
-                    # Обучение модели на обучающей выборке
-                    model.fit_model(train_df, defect_name, obj_name, date_name, anomalies_only=anomalies_only_type)
+        # Получение прогноза
+        prediction = model.get_prediction(arl_fca_lab.get_row(test_matrix, i), obj_num)
+        
+        # Сохранение результатов
+        test_results.loc[i, 'Object'] = test_matrix.loc[i, obj_name]
+        test_results.loc[i, 'Fact'] = test_matrix.loc[i, 'defect_markup']
 
-                    print('Выполнено')
-                    print('Подготовка тестового датасета')
+        if prediction == None:
+            # Если правило не найдено
+            test_results.loc[i, 'Prediction'] = 0
+            test_results.loc[i, 'Rule'] = -1
+        else:
+            # Если правило найдено
+            test_results.loc[i, 'Prediction'] = prediction[0]
+            test_results.loc[i, 'Rule'] = prediction[1]
+            
+        # Вывод информации о текущем прогнозе
+        # print('Index:', i, ', Object:', test_results.loc[i, 'Object'], 
+        #     ', Predict:', test_results.loc[i, 'Prediction'],
+        #     ', Fact:',test_results.loc[i, 'Fact'])
+    
+    print('Выполнено')
+    # Объединение результатов с исходными данными
+    test_results = pd.concat([test_results, test_matrix[[date_name, 'defect_markup']]], axis=1)
+    
+    # Расчет метрик качества для разных пороговых значений
+    threshold_f1= pd.DataFrame()
+    for threshold in numpy.arange(0.01, 0.99, 0.01):
+        # Расчет True Positive (TP)
+        threshold_f1.loc[threshold, 'TP'] = len(
+            test_results[(test_results.Fact == 1)&(test_results.Prediction >= threshold)])
+        # Расчет False Positive (FP)
+        threshold_f1.loc[threshold, 'FP'] = len(
+            test_results[(test_results.Fact == 0)&(test_results.Prediction >= threshold)])
+        # Расчет False Negative (FN)
+        threshold_f1.loc[threshold, 'FN'] = len(
+            test_results[(test_results.Fact == 1) & (test_results.Prediction < threshold)])
+        # Расчет True Negative (TN)
+        threshold_f1.loc[threshold, 'TN'] = len(
+            test_results[(test_results.Fact == 0) & (test_results.Prediction < threshold)])
+        # Сумма TN и TP
+        threshold_f1.loc[threshold, 'TN_TP'] = threshold_f1.loc[threshold, 'TN']+threshold_f1.loc[threshold, 'TP']
+        threshold_f1.loc[threshold, 'Threshold'] = threshold
 
-                    # Преобразование тестовых данных с использованием полученной модели бинаризации
-                    test_matrix = model.bin_matrix.transform(
-                        test_df, 
-                        model.defect, 
-                        obj_name, 
-                        date_name,
-                        model.keep_nan, 
-                        model.days_before_defect, 
-                        model.anomalies_only
-                    )
-                    print('Выполнено')
-                    print('Расчет оценок')
+    x = threshold_f1['Threshold']
+    tp_y = threshold_f1['TP'] / len(test_results[test_results['Fact'] == 1])
+    fp_y = threshold_f1['FP'] / len(test_results[(test_results['defect_markup'] == 0)&(test_results['Fact'] == 0)])
 
-                    # Создание DataFrame для хранения результатов прогнозирования
-                    test_results = pd.DataFrame(index=test_matrix.index, columns=['Object', 'Prediction', 'Fact', 'Rule'])
+    
+    title = 'QUARTILES & HISTOGRAMMS__I-{0}__N-{1}__A-{2}'.format('True' if sample.get('individual') else 'False', 'True' if sample.get('keep_nan') else 'False', 'True' if sample.get('anomalies_only') else 'False')
+    save_plot(x, tp_y, fp_y, title)
+    save_plot_data('q+h.json', x.to_list(), tp_y.to_list(), 'TP__' + title, greens[greens_count])
+    save_plot_data('q+h.json', x.to_list(), fp_y.to_list(), 'FP__' + title, reds[reds_count])
+    greens_count += 1
+    reds_count += 1
 
-                    # Прогнозирование для каждой строки тестовых данных
-                    for i in test_matrix.index:
-                        if model.ind_type:
-                            obj_num = test_matrix.loc[i, obj_name]  # Номер электролизера для индивидуальной модели
-                        else:
-                            obj_num = 'all'  # Общая модель
-                            
-                        # Получение прогноза
-                        prediction = model.get_prediction(arl_fca_lab.get_row(test_matrix, i), obj_num)
-                        
-                        # Сохранение результатов
-                        test_results.loc[i, 'Object'] = test_matrix.loc[i, obj_name]
-                        test_results.loc[i, 'Fact'] = test_matrix.loc[i, 'defect_markup']
-
-                        if prediction == None:
-                            # Если правило не найдено
-                            test_results.loc[i, 'Prediction'] = 0
-                            test_results.loc[i, 'Rule'] = -1
-                        else:
-                            # Если правило найдено
-                            test_results.loc[i, 'Prediction'] = prediction[0]
-                            test_results.loc[i, 'Rule'] = prediction[1]
-                            
-                        # Вывод информации о текущем прогнозе
-                        # print('Index:', i, ', Object:', test_results.loc[i, 'Object'], 
-                        #     ', Predict:', test_results.loc[i, 'Prediction'],
-                        #     ', Fact:',test_results.loc[i, 'Fact'])
-                    
-                    print('Выполнено')
-                    # Объединение результатов с исходными данными
-                    test_results = pd.concat([test_results, test_matrix[[date_name, 'defect_markup']]], axis=1)
-                    
-                    # Расчет метрик качества для разных пороговых значений
-                    threshold_f1= pd.DataFrame()
-                    for threshold in numpy.arange(0.01, 0.99, 0.01):
-                        # Расчет True Positive (TP)
-                        threshold_f1.loc[threshold, 'TP'] = len(
-                            test_results[(test_results.Fact == 1)&(test_results.Prediction >= threshold)])
-                        # Расчет False Positive (FP)
-                        threshold_f1.loc[threshold, 'FP'] = len(
-                            test_results[(test_results.Fact == 0)&(test_results.Prediction >= threshold)])
-                        # Расчет False Negative (FN)
-                        threshold_f1.loc[threshold, 'FN'] = len(
-                            test_results[(test_results.Fact == 1) & (test_results.Prediction < threshold)])
-                        # Расчет True Negative (TN)
-                        threshold_f1.loc[threshold, 'TN'] = len(
-                            test_results[(test_results.Fact == 0) & (test_results.Prediction < threshold)])
-                        # Сумма TN и TP
-                        threshold_f1.loc[threshold, 'TN_TP'] = threshold_f1.loc[threshold, 'TN']+threshold_f1.loc[threshold, 'TP']
-                        threshold_f1.loc[threshold, 'Threshold'] = threshold
-
-                    x = threshold_f1['Threshold']
-                    tp_y = threshold_f1['TP'] / len(test_results[test_results['Fact'] == 1])
-                    fp_y = threshold_f1['FP'] / len(test_results[(test_results['defect_markup'] == 0)&(test_results['Fact'] == 0)])
-
-                    title = '3!!!{0}__I-{1}__N-{2}__A-{3}'.format(binary_type.name, 'True' if individual_type else 'False', 'True' if keep_nan_type else 'False', 'True' if anomalies_only_type else 'False')
-                    save_plot(x, tp_y, fp_y, title)
-                    # save_plot_data('output_full.json', x.to_list(), tp_y.to_list(), 'TP__' + title, greens[greens_count])
-                    # save_plot_data('output_full.json', x.to_list(), fp_y.to_list(), 'FP__' + title, reds[reds_count])
-                    # greens_count += 1
-                    # reds_count += 1
-                    print('--------DONE--------')
+    print('--------DONE--------')
 
     print('!')

@@ -23,8 +23,7 @@ class arl_fca_lab:
     - Прогнозировать дефекты
     """
     
-    def __init__(self, bin_type: arl_binarization.BinarizationType = arl_binarization.BinarizationType.HISTOGRAMS,
-                 ind_type: bool = True, keep_nan=True, days_before_defect=3):
+    def __init__(self, ind_type, days_before_defect=3):
         """
         Инициализация объекта анализатора.
         
@@ -39,9 +38,7 @@ class arl_fca_lab:
         days_before_defect : int, default=1
             Количество дней до дефекта для анализа
         """
-        self.bin_type = bin_type  # Метод бинаризации
-        self.ind_type = ind_type  # Тип модели (индивидуальная/общая)
-        self.keep_nan = keep_nan  # Флаг сохранения NaN значений
+        self.ind_type = ind_type
         self.days_before_defect = days_before_defect  # Дней до дефекта для анализа
         self.lat = None  # Решетка формальных понятий (будет инициализирована позже)
         self.concepts_df = None  # DataFrame с концептами (устаревшее, используется confidence_df)
@@ -49,10 +46,9 @@ class arl_fca_lab:
         self.defect = []  # Список целевых параметров (дефектов)
         self.objs = []  # Список объектов (электролизеров) для анализа
         self.bin_matrix = arl_binarization.ArlBinaryMatrix()  # Объект для бинаризации данных
-        self.anomalies_only = False  # Флаг работы только с аномальными значениями
         self.threshold = 0.34  # Порог уверенности для правил
 
-    def fit_model(self, df: pd.DataFrame, defect: str, obj_column: str, parse_date: str, anomalies_only: bool=False):
+    def fit_model(self, df: pd.DataFrame, defect: str, obj_column: str, parse_date: str, settings):
         """
         Построение модели анализа данных.
         
@@ -78,15 +74,11 @@ class arl_fca_lab:
         else:
             self.objs = ['all']  # Общая модель для всех данных
             
-        self.anomalies_only = anomalies_only  # Сохраняем флаг аномалий
-
-        # Создаем модель бинаризации
-        self.bin_matrix.create_model(df, obj_column, parse_date, self.bin_type, defect, self.ind_type)
+        self.bin_matrix.create_model(df, obj_column, parse_date, settings, defect)
         print('Модель создана')
         
         # Преобразуем данные в бинарный формат
-        self.bin_matrix.transform(df, self.defect, obj_column, parse_date, self.keep_nan,
-                                self.days_before_defect, self.anomalies_only)
+        self.bin_matrix.transform(df, self.defect, obj_column, parse_date, settings, self.days_before_defect)
         print('Данные бинаризованы')
 
         # Для каждого объекта (электролизера) строим решетку концептов
